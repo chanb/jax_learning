@@ -1,0 +1,12 @@
+OBSERVATIONS = "observations"
+ACTIONS = "actions"
+HIDDEN_STATES = "hidden_states"
+REWARDS = "rewards"
+DONES = "dones"
+INFOS = "infos"
+
+MEMORY_SIZE = "memory_size"
+POINTER = "pointer"
+COUNT = "count"
+DTYPE = "dtype"
+RNG = "rng"
