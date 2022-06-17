@@ -7,6 +7,8 @@ setup(
     python_requires=">=3.10",
     install_requires=[
         "jax",
+        "jaxlib",
+        "flax",
         "jupyter",
     ],
     packages=find_packages(),
