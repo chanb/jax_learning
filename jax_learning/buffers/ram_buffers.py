@@ -25,7 +25,7 @@ class NumPyBuffer(ReplayBuffer):
                  padding_first: bool=False,
                  checkpoint_interval: int=0,
                  checkpoint_path: Optional[str]=None,
-                 rng: np.random.Generator=np.random.default_rng(),
+                 rng: np.random.RandomState=np.random.RandomState(),
                  dtype: np.dtype=np.float32):
         self.rng = rng
         self._memory_size = memory_size
@@ -365,7 +365,7 @@ class NextStateNumPyBuffer(NumPyBuffer):
                  padding_first: bool=False,
                  checkpoint_interval: int=0,
                  checkpoint_path: Optional[str]=None,
-                 rng: np.random.Generator=np.random.default_rng(),
+                 rng: np.random.RandomState=np.random.RandomState(),
                  dtype: np.dtype=np.float32):
         super().__init__(memory_size=memory_size,
                          obs_dim=obs_dim,
@@ -510,7 +510,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
                  padding_first: bool=False,
                  checkpoint_interval: int=0,
                  checkpoint_path: Optional[str]=None,
-                 rng: np.random.Generator=np.random.default_rng(),
+                 rng: np.random.RandomState=np.random.RandomState(),
                  dtype: np.dtype=np.float32):
         super().__init__(memory_size=memory_size,
                          obs_dim=obs_dim,
