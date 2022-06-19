@@ -6,10 +6,11 @@ setup(
     version="0.1",
     python_requires=">=3.10",
     install_requires=[
+        "flax",
         "jax",
         "jaxlib",
-        "flax",
         "jupyter",
+        "optax",
     ],
     packages=find_packages(),
     include_package_data=True,
