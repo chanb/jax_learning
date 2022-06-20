@@ -17,7 +17,7 @@ class CheckpointIndexError(Exception):
 
 class ReplayBuffer:
     @property
-    def memory_size(self):
+    def buffer_size(self):
         raise NotImplementedError
 
     @property

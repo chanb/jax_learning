@@ -15,7 +15,7 @@ import jax_learning.constants as c
 
 class NumPyBuffer(ReplayBuffer):
     def __init__(self,
-                 memory_size: int,
+                 buffer_size: int,
                  obs_dim: Iterable,
                  h_state_dim: Iterable,
                  act_dim: Iterable,
@@ -28,16 +28,16 @@ class NumPyBuffer(ReplayBuffer):
                  rng: np.random.RandomState=np.random.RandomState(),
                  dtype: np.dtype=np.float32):
         self.rng = rng
-        self._memory_size = memory_size
+        self._buffer_size = buffer_size
         self._dtype = dtype
-        self.observations = np.zeros(shape=(memory_size, *obs_dim), dtype=dtype)
-        self.hidden_states = np.zeros(shape=(memory_size, *h_state_dim), dtype=np.float32)
-        self.actions = np.zeros(shape=(memory_size, *act_dim), dtype=np.float32)
-        self.rewards = np.zeros(shape=(memory_size, *rew_dim), dtype=np.float32)
-        self.dones = np.zeros(shape=(memory_size, 1), dtype=np.float32)
+        self.observations = np.zeros(shape=(buffer_size, *obs_dim), dtype=dtype)
+        self.hidden_states = np.zeros(shape=(buffer_size, *h_state_dim), dtype=np.float32)
+        self.actions = np.zeros(shape=(buffer_size, *act_dim), dtype=np.float32)
+        self.rewards = np.zeros(shape=(buffer_size, *rew_dim), dtype=np.float32)
+        self.dones = np.zeros(shape=(buffer_size, 1), dtype=np.float32)
         self.infos = dict()
         for info_name, (info_shape, info_dtype) in infos.items():
-            self.infos[info_name] = np.zeros(shape=(memory_size, *info_shape), dtype=info_dtype)
+            self.infos[info_name] = np.zeros(shape=(buffer_size, *info_shape), dtype=info_dtype)
 
         # This keeps track of the past X observations and hidden states for RNN
         self.burn_in_window = burn_in_window
@@ -48,8 +48,8 @@ class NumPyBuffer(ReplayBuffer):
             self.historic_dones = np.ones(shape=(burn_in_window, 1), dtype=np.float32)
 
         self._checkpoint_interval = checkpoint_interval
-        self._checkpoint_idxes = np.ones(shape=memory_size, dtype=np.bool)
-        if checkpoint_path is not None and memory_size >= checkpoint_interval > 0:
+        self._checkpoint_idxes = np.ones(shape=buffer_size, dtype=np.bool_)
+        if checkpoint_path is not None and buffer_size >= checkpoint_interval > 0:
             self._checkpoint_path = checkpoint_path
             os.makedirs(checkpoint_path, exist_ok=True)
             self.checkpoint = self._checkpoint
@@ -61,12 +61,12 @@ class NumPyBuffer(ReplayBuffer):
         self._count = 0
 
     @property
-    def memory_size(self):
-        return self._memory_size
+    def buffer_size(self):
+        return self._buffer_size
 
     @property
     def is_full(self):
-        return self._count >= self.memory_size
+        return self._count >= self.buffer_size
 
     @property
     def pointer(self):
@@ -74,15 +74,15 @@ class NumPyBuffer(ReplayBuffer):
 
     def set_size(self,
                  size: int):
-        if size == self._memory_size:
+        if size == self._buffer_size:
             return
-        elif size < self._memory_size:
-            self._memory_size = size
-            self._pointer = min(self._memory_size, self._pointer) % self._memory_size
-        elif size > self._memory_size:
+        elif size < self._buffer_size:
+            self._buffer_size = size
+            self._pointer = min(self._buffer_size, self._pointer) % self._buffer_size
+        elif size > self._buffer_size:
             if self.is_full:
-                self._pointer = self._memory_size
-            self._memory_size = size
+                self._pointer = self._buffer_size
+            self._buffer_size = size
         self._count = self._pointer
 
     def __getitem__(self,
@@ -95,7 +95,7 @@ class NumPyBuffer(ReplayBuffer):
                 {info_name: info_value[index] for info_name, info_value in self.infos.items()})
 
     def __len__(self) -> int:
-        return min(self._count, self.memory_size)
+        return min(self._count, self.buffer_size)
 
     def _checkpoint(self):
         transitions_to_save = np.where(self._checkpoint_idxes == 0)[0]
@@ -132,7 +132,7 @@ class NumPyBuffer(ReplayBuffer):
              info: dict,
              **kwargs) -> bool:
         # Stores the overwritten observation and hidden state into historic variables
-        if self.burn_in_window > 0 and self._count >= self._memory_size:
+        if self.burn_in_window > 0 and self._count >= self._buffer_size:
             self.historic_observations = np.concatenate(
                 (self.historic_observations[1:], [self.observations[self._pointer]]))
             self.historic_hidden_states = np.concatenate(
@@ -151,10 +151,10 @@ class NumPyBuffer(ReplayBuffer):
                 continue
             self.infos[info_name][self._pointer] = info_value
 
-        self._pointer = (self._pointer + 1) % self._memory_size
+        self._pointer = (self._pointer + 1) % self._buffer_size
         self._count += 1
 
-        if self._checkpoint_interval > 0 and (self._memory_size - self._checkpoint_idxes.sum()) >= self._checkpoint_interval:
+        if self._checkpoint_interval > 0 and (self._buffer_size - self._checkpoint_idxes.sum()) >= self._checkpoint_interval:
             self.checkpoint()
         return True
 
@@ -172,14 +172,14 @@ class NumPyBuffer(ReplayBuffer):
                             idxes: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         historic_observations = np.zeros((len(idxes), self.burn_in_window, *self.observations.shape[1:]))
         historic_hidden_states = np.zeros((len(idxes), self.burn_in_window, *self.hidden_states.shape[1:]))
-        not_dones = np.ones((len(idxes), self.burn_in_window), dtype=np.bool)
-        lengths = np.zeros(len(idxes), dtype=np.int)
+        not_dones = np.ones((len(idxes), self.burn_in_window), dtype=np.bool_)
+        lengths = np.zeros(len(idxes), dtype=np.int64)
 
         shifted_idxes = ((idxes - self._pointer) % len(self) - np.arange(self.burn_in_window, 0, -1)[:, None]).T
         cyclic_idxes = (idxes - np.arange(self.burn_in_window, 0, -1)[:, None]).T
         
         # Determine which index needs to look into historic buffer
-        historic_idxes = np.logical_and(shifted_idxes >= -self.burn_in_window, shifted_idxes < 0).astype(np.int)
+        historic_idxes = np.logical_and(shifted_idxes >= -self.burn_in_window, shifted_idxes < 0).astype(np.int64)
         non_historic_idxes = 1 - historic_idxes
         
         # Check whether we have reached another episode
@@ -187,7 +187,7 @@ class NumPyBuffer(ReplayBuffer):
         not_dones[np.where(self.historic_dones[shifted_idxes * historic_idxes, 0] * historic_idxes)] = 0
 
         lengths = np.argmin(np.flip(not_dones, axis=1), axis=1) + np.all(not_dones, axis=1) * self.burn_in_window
-        take_mask = np.concatenate((np.zeros((1, self.burn_in_window), dtype=np.int), np.eye(self.burn_in_window)), axis=0)[lengths]
+        take_mask = np.concatenate((np.zeros((1, self.burn_in_window), dtype=np.int64), np.eye(self.burn_in_window)), axis=0)[lengths]
         np.cumsum(np.flip(take_mask, axis=1), axis=1, out=take_mask)
         
         non_historic_take_mask = np.where(take_mask * non_historic_idxes)
@@ -200,7 +200,7 @@ class NumPyBuffer(ReplayBuffer):
         historic_hidden_states[non_historic_take_mask] = self.hidden_states[non_historic_cyclic_idxes]
 
         # Update for transitions looking into historic buffer
-        if self._count > self._memory_size:
+        if self._count > self._buffer_size:
             historic_observations[historic_take_mask] = self.observations[historic_cyclic_idxes]
             historic_hidden_states[historic_take_mask] = self.hidden_states[historic_cyclic_idxes]
 
@@ -215,7 +215,7 @@ class NumPyBuffer(ReplayBuffer):
         dones = self.dones[idxes]
         infos = {info_name: info_value[idxes] for info_name, info_value in self.infos.items()}
         
-        lengths = np.ones(len(obss), dtype=np.int)
+        lengths = np.ones(len(obss), dtype=np.int64)
         if self.burn_in_window:
             historic_obss, historic_h_states, lengths = self._get_burn_in_window(idxes)
             obss = np.concatenate((historic_obss, obss[:, None, ...]), axis=1)
@@ -285,7 +285,7 @@ class NumPyBuffer(ReplayBuffer):
                         **kwargs) -> Tuple[np.ndarray, np.ndarray]:
         if np.sum(self.dones) == 0:
             raise NoSampleError
-        init_idxes = (np.where(self.dones == 1)[0] + 1) % self._memory_size
+        init_idxes = (np.where(self.dones == 1)[0] + 1) % self._buffer_size
 
         # Filter out indices greater than the current pointer.
         # It is useless once we exceed count > memory size
@@ -311,11 +311,11 @@ class NumPyBuffer(ReplayBuffer):
 
             wraparound_idxes = done_idxes[done_idxes < self._pointer]
             if len(wraparound_idxes) > 0:
-                pointer = (wraparound_idxes[-1] + 1) % self._memory_size
+                pointer = (wraparound_idxes[-1] + 1) % self._buffer_size
                 count -= (self._pointer - pointer)
             else:
-                pointer = (done_idxes[-1] + 1) % self._memory_size
-                count -= (self._pointer + self._memory_size - pointer)
+                pointer = (done_idxes[-1] + 1) % self._buffer_size
+                count -= (self._pointer + self._buffer_size - pointer)
 
         with gzip.open(save_path, "wb") as f:
             pickle.dump({
@@ -325,7 +325,7 @@ class NumPyBuffer(ReplayBuffer):
                 c.REWARDS: self.rewards,
                 c.DONES: self.dones,
                 c.INFOS: self.infos,
-                c.MEMORY_SIZE: self._memory_size,
+                c.BUFFER_SIZE: self._buffer_size,
                 c.POINTER: pointer,
                 c.COUNT: count,
                 c.DTYPE: self._dtype,
@@ -338,7 +338,7 @@ class NumPyBuffer(ReplayBuffer):
         with gzip.open(load_path, "rb") as f:
             data = pickle.load(f)
 
-        self._memory_size = data[c.MEMORY_SIZE]
+        self._buffer_size = data[c.BUFFER_SIZE]
         self.observations = data[c.OBSERVATIONS]
         self.hidden_states = data[c.HIDDEN_STATES]
         self.actions = data[c.ACTIONS]
@@ -355,7 +355,7 @@ class NumPyBuffer(ReplayBuffer):
 
 class NextStateNumPyBuffer(NumPyBuffer):
     def __init__(self,
-                 memory_size: int,
+                 buffer_size: int,
                  obs_dim: Iterable,
                  h_state_dim: Iterable,
                  act_dim: Iterable,
@@ -367,7 +367,7 @@ class NextStateNumPyBuffer(NumPyBuffer):
                  checkpoint_path: Optional[str]=None,
                  rng: np.random.RandomState=np.random.RandomState(),
                  dtype: np.dtype=np.float32):
-        super().__init__(memory_size=memory_size,
+        super().__init__(buffer_size=buffer_size,
                          obs_dim=obs_dim,
                          h_state_dim=h_state_dim,
                          act_dim=act_dim,
@@ -450,11 +450,11 @@ class NextStateNumPyBuffer(NumPyBuffer):
 
             wraparound_idxes = done_idxes[done_idxes < self._pointer]
             if len(wraparound_idxes) > 0:
-                pointer = (wraparound_idxes[-1] + 1) % self._memory_size
+                pointer = (wraparound_idxes[-1] + 1) % self._buffer_size
                 count -= (self._pointer - pointer)
             else:
-                pointer = (done_idxes[-1] + 1) % self._memory_size
-                count -= (self._pointer + self._memory_size - pointer)
+                pointer = (done_idxes[-1] + 1) % self._buffer_size
+                count -= (self._pointer + self._buffer_size - pointer)
 
         with gzip.open(save_path, "wb") as f:
             pickle.dump({
@@ -466,7 +466,7 @@ class NextStateNumPyBuffer(NumPyBuffer):
                 c.NEXT_OBSERVATIONS: self.next_observations,
                 c.NEXT_HIDDEN_STATES: self.next_hidden_states,
                 c.INFOS: self.infos,
-                c.MEMORY_SIZE: self._memory_size,
+                c.BUFFER_SIZE: self._buffer_size,
                 c.POINTER: pointer,
                 c.COUNT: count,
                 c.DTYPE: self._dtype,
@@ -479,7 +479,7 @@ class NextStateNumPyBuffer(NumPyBuffer):
         with gzip.open(load_path, "rb") as f:
             data = pickle.load(f)
 
-        self._memory_size = data[c.MEMORY_SIZE]
+        self._buffer_size = data[c.BUFFER_SIZE]
         self.observations = data[c.OBSERVATIONS]
         self.hidden_states = data[c.HIDDEN_STATES]
         self.next_observations = data[c.NEXT_OBSERVATIONS]
@@ -500,7 +500,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
     """ This buffer stores one trajectory as a sample
     """
     def __init__(self,
-                 memory_size: int,
+                 buffer_size: int,
                  obs_dim: Iterable,
                  h_state_dim: Iterable,
                  act_dim: Iterable,
@@ -512,7 +512,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
                  checkpoint_path: Optional[str]=None,
                  rng: np.random.RandomState=np.random.RandomState(),
                  dtype: np.dtype=np.float32):
-        super().__init__(memory_size=memory_size,
+        super().__init__(buffer_size=buffer_size,
                          obs_dim=obs_dim,
                          h_state_dim=h_state_dim,
                          act_dim=act_dim,
@@ -576,7 +576,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         batch_lengths = np.clip(horizon_length - batch_episode_lengths, a_min=0, a_max=horizon_length)
         sample_mask = np.flip(np.cumsum(np.eye(horizon_length)[batch_lengths], axis=-1), axis=-1)
 
-        sample_idxes = ((self.rng.randint(valid_starts) + episode_start_idxes[episode_idxes])[:, None] + sample_lengths) % self._memory_size
+        sample_idxes = ((self.rng.randint(valid_starts) + episode_start_idxes[episode_idxes])[:, None] + sample_lengths) % self._buffer_size
         obss, h_states, acts, rews, dones, infos, _ = self.get_transitions(sample_idxes.reshape(-1))
         sample_idxes = sample_idxes * sample_mask - np.ones(sample_idxes.shape) * (1 - sample_mask)
         infos[c.EPISODE_IDXES] = episode_idxes

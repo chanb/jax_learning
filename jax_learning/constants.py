@@ -5,7 +5,7 @@ REWARDS = "rewards"
 DONES = "dones"
 INFOS = "infos"
 
-MEMORY_SIZE = "memory_size"
+BUFFER_SIZE = "buffer_size"
 POINTER = "pointer"
 COUNT = "count"
 DTYPE = "dtype"
