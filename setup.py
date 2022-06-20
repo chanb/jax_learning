@@ -6,7 +6,7 @@ setup(
     version="0.1",
     python_requires=">=3.10",
     install_requires=[
-        "flax",
+        "equinox",
         "jax",
         "jaxlib",
         "jupyter",
