@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 
-from jax_learning.models.models import Policy, ActionValue
+from jax_learning.models.models import Policy, ActionValue, MLP
 
 
 class SoftmaxQ(Policy, ActionValue):
@@ -36,12 +36,7 @@ class SoftmaxQ(Policy, ActionValue):
     
 
 class MLPSoftmaxQ(SoftmaxQ):
-    weights: Sequence[eqx.nn.Linear]
-    biases: Sequence[jnp.ndarray]
-
-    @property
-    def num_hidden(self):
-        return len(self.weights) - 1
+    q_function: eqx.Module
 
     def __init__(self,
                  obs_dim: Sequence[int],
@@ -50,23 +45,11 @@ class MLPSoftmaxQ(SoftmaxQ):
                  num_hidden: int,
                  key: jrandom.PRNGKey):
         super().__init__(obs_dim, act_dim)
-        self.weights = [eqx.nn.Linear(self.obs_dim, hidden_dim, use_bias=False, key=key)]
-        self.biases = [jnp.zeros(hidden_dim)]
-        for _ in range(num_hidden - 1):
-            key, _ = jrandom.split(key, num=2)
-            self.weights.append(eqx.nn.Linear(hidden_dim, hidden_dim, use_bias=False, key=key))
-            self.biases.append(jnp.zeros(hidden_dim))
-            
-        key, _ = jrandom.split(key, num=2)
-        self.weights.append(eqx.nn.Linear(hidden_dim, self.act_dim, use_bias=False, key=key))
-        self.biases.append(jnp.zeros(self.act_dim))
+        self.q_function = MLP(self.obs_dim, self.act_dim, hidden_dim, num_hidden, key)
 
     def q_values(self,
                  obs: np.ndarray,
                  h_state: np.ndarray,
                  act: Optional[np.ndarray]=None) -> Tuple[np.ndarray, np.ndarray]:
-        x = obs
-        for layer_i in range(self.num_hidden):
-            x = jax.nn.relu(self.weights[layer_i](x) + self.biases[layer_i])
-        x = self.weights[-1](x) + self.biases[-1]
-        return x, h_state
+        qs = self.q_function(obs)
+        return qs, h_state
