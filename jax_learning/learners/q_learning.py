@@ -1,5 +1,5 @@
 from argparse import Namespace
-from typing import Tuple
+from typing import Tuple, Dict
 
 import equinox as eqx
 import jax
@@ -9,9 +9,10 @@ import optax
 
 from jax_learning.buffers.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
-from jax_learning.learners.learners import Learner
+from jax_learning.learners.learners import LearnerWithTargetNetwork
 from jax_learning.losses.value_loss import q_learning_td_error
 
+LOSS = "loss"
 MEAN_LOSS = "mean_loss"
 MEAN_Q_CURR = "mean_q_curr"
 MEAN_Q_NEXT = "mean_q_next"
@@ -19,21 +20,21 @@ MAX_Q_CURR = "max_q_curr"
 MAX_Q_NEXT = "max_q_next"
 MIN_Q_CURR = "min_q_curr"
 MIN_Q_NEXT = "min_q_next"
+MAX_TD_ERROR = "max_td_error"
+MIN_TD_ERROR = "min_td_error"
+Q = "q"
 
 
-class QLearning(Learner):
+class QLearning(LearnerWithTargetNetwork):
     def __init__(self,
-                 model: eqx.Module,
-                 target_model: eqx.Module,
-                 opt: optax.GradientTransformation,
+                 model: Dict[str, eqx.Module],
+                 target_model: Dict[str, eqx.Module],
+                 opt: Dict[str, optax.GradientTransformation],
                  buffer: ReplayBuffer,
                  cfg: Namespace):
-        super().__init__(model, opt, buffer, cfg)
-        self._target_model = target_model
-        self._opt_state = self._opt.init(model)
+        super().__init__(model, target_model, opt, buffer, cfg)
         
         self._step = cfg.load_step
-        
         self._batch_size = cfg.batch_size
         self._buffer_warmup = cfg.buffer_warmup
         self._num_gradient_steps = cfg.num_gradient_steps
@@ -60,15 +61,15 @@ class QLearning(Learner):
             td_errors = jax.vmap(q_learning_td_error)(q_curr_preds, acts, q_next_preds, rews, dones, gammas)
             loss = jnp.mean(td_errors ** 2)
             return loss, {
-                "loss": loss,
-                "max_q_next": jnp.max(q_next_preds),
-                "min_q_next": jnp.min(q_next_preds),
-                "mean_q_next": jnp.mean(q_next_preds),
-                "max_q_curr": jnp.max(q_curr_preds),
-                "min_q_curr": jnp.min(q_curr_preds),
-                "mean_q_curr": jnp.mean(q_curr_preds),
-                "max_td_error": jnp.max(td_errors),
-                "min_td_error": jnp.min(td_errors),
+                LOSS: loss,
+                MAX_Q_NEXT: jnp.max(q_next_preds),
+                MIN_Q_NEXT: jnp.min(q_next_preds),
+                MEAN_Q_NEXT: jnp.mean(q_next_preds),
+                MAX_Q_CURR: jnp.max(q_curr_preds),
+                MIN_Q_CURR: jnp.min(q_curr_preds),
+                MEAN_Q_CURR: jnp.mean(q_curr_preds),
+                MAX_TD_ERROR: jnp.max(td_errors),
+                MIN_TD_ERROR: jnp.min(td_errors),
             }
         
         def step(model: eqx.Module,
@@ -103,14 +104,6 @@ class QLearning(Learner):
             model = eqx.apply_updates(model, updates)
             return model, opt_state, (grads, model_grads, target_model_grads), learn_info
         self.step = eqx.filter_jit(step)
-    
-    @property
-    def target_model(self):
-        return self._target_model
-    
-    @property
-    def opt_state(self):
-        return self._opt_state
         
     def learn(self,
               next_obs: np.ndarray,
@@ -144,10 +137,10 @@ class QLearning(Learner):
                                                                                                           next_obss,
                                                                                                           next_h_states,
                                                                                                           gammas))
-            model, opt_state, grads, curr_learn_info = self.step(model=self.model,
-                                                                 target_model=self.target_model,
-                                                                 opt=self.opt,
-                                                                 opt_state=self.opt_state,
+            model, opt_state, grads, curr_learn_info = self.step(model=self.model[Q],
+                                                                 target_model=self.target_model[Q],
+                                                                 opt=self.opt[Q],
+                                                                 opt_state=self.opt_state[Q],
                                                                  obss=obss,
                                                                  h_states=h_states,
                                                                  acts=acts,
@@ -158,15 +151,13 @@ class QLearning(Learner):
                                                                  gammas=gammas,
                                                                  omega=self._omega)
 
-            self._model = model
-            self._opt_state = opt_state
+            self._model[Q] = model
+            self._opt_state[Q] = opt_state
             
             if self._step % self._target_update_frequency == 0:
-                self._target_model = jax.tree_map(lambda p, tp: p * self._tau + tp * (1 - self._tau),
-                                                  self.model,
-                                                  self.target_model)
+                self.polyak_average(model_key=Q)
             
-            learn_info[MEAN_LOSS] += curr_learn_info["loss"].item() / self._num_gradient_steps
+            learn_info[MEAN_LOSS] += curr_learn_info[LOSS].item() / self._num_gradient_steps
             learn_info[MEAN_Q_CURR] += curr_learn_info[MEAN_Q_CURR].item() / self._num_gradient_steps
             learn_info[MEAN_Q_NEXT] += curr_learn_info[MEAN_Q_NEXT].item() / self._num_gradient_steps
             learn_info[MAX_Q_CURR] = max(learn_info[MAX_Q_CURR], curr_learn_info[MAX_Q_CURR].item())

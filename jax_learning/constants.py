@@ -18,3 +18,6 @@ TIMEDIFF = "time_diff"
 TIMESTEP = "timestep"
 
 RESET = "reset"
+
+CONTINUOUS = "continuous"
+DISCRETE = "discrete"
