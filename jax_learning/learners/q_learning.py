@@ -10,7 +10,7 @@ import optax
 from jax_learning.buffers.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
 from jax_learning.learners.learners import Learner
-from jax_learning.losses.value_loss import one_step_bellman_optimality_error
+from jax_learning.losses.value_loss import q_learning_td_error
 
 MEAN_LOSS = "mean_loss"
 MEAN_Q_CURR = "mean_q_curr"
@@ -57,7 +57,7 @@ class QLearning(Learner):
             q_curr_preds, _ = jax.vmap(model.q_values)(obss, h_states)
             q_next_preds, _ = jax.vmap(target_model.q_values)(next_obss, next_h_states)
             
-            td_errors = jax.vmap(one_step_bellman_optimality_error)(q_curr_preds, acts, q_next_preds, rews, dones, gammas)
+            td_errors = jax.vmap(q_learning_td_error)(q_curr_preds, acts, q_next_preds, rews, dones, gammas)
             loss = jnp.mean(td_errors ** 2)
             return loss, {
                 "loss": loss,
