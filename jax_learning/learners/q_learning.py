@@ -1,4 +1,5 @@
 from argparse import Namespace
+from typing import Tuple
 
 import equinox as eqx
 import jax
@@ -41,19 +42,19 @@ class QLearning(Learner):
         self._target_update_frequency = cfg.target_update_frequency
         self._omega = cfg.omega
         
-        def step(model,
-                 target_model,
-                 opt,
-                 opt_state,
-                 obss,
-                 h_states,
-                 acts,
-                 rews,
-                 dones,
-                 next_obss,
-                 next_h_states,
-                 gammas,
-                 omega):
+        def step(model: eqx.Module,
+                 target_model: eqx.Module,
+                 opt: optax.GradientTransformation,
+                 opt_state: optax.OptState,
+                 obss: np.ndarray,
+                 h_states: np.ndarray,
+                 acts: np.ndarray,
+                 rews: np.ndarray,
+                 dones: np.ndarray,
+                 next_obss: np.ndarray,
+                 next_h_states: np.ndarray,
+                 gammas: np.ndarray,
+                 omega: float) -> Tuple[eqx.Module, optax.OptState, Tuple[jax.tree_util.PyTreeDef, jax.tree_util.PyTreeDef, jax.tree_util.PyTreeDef], dict]:
             grads, learn_info = q_learning_loss((model, target_model),
                                                 obss,
                                                 h_states,
