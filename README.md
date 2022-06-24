@@ -1,5 +1,5 @@
 # JAX Learning
-This repository provide learning algorithms using JAX.
+This repository provides learning algorithms using JAX.
 
 # Installation
 ## Prerequisites
