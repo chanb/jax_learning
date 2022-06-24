@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Optional
 
 import equinox as eqx
 import jax
@@ -6,10 +6,10 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 
-from jax_learning.models.models import RLModel
+from jax_learning.models.models import Policy, ActionValue
 
 
-class SoftmaxQ(RLModel):
+class SoftmaxQ(Policy, ActionValue):
     obs_dim: int
     act_dim: int
 
@@ -63,7 +63,8 @@ class MLPSoftmaxQ(SoftmaxQ):
 
     def q_values(self,
                  obs: np.ndarray,
-                 h_state: np.ndarray) -> np.ndarray:
+                 h_state: np.ndarray,
+                 act: Optional[np.ndarray]=None) -> Tuple[np.ndarray, np.ndarray]:
         x = obs
         for layer_i in range(self.num_hidden):
             x = jax.nn.relu(self.weights[layer_i](x) + self.biases[layer_i])
