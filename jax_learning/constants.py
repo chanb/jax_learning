@@ -10,3 +10,11 @@ POINTER = "pointer"
 COUNT = "count"
 DTYPE = "dtype"
 RNG = "rng"
+
+EPISODE = "episode"
+EPISODE_LENGTH = "episode_length"
+EPISODIC_RETURN = "episodic_return"
+TIMEDIFF = "time_diff"
+TIMESTEP = "timestep"
+
+RESET = "reset"
