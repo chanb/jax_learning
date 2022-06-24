@@ -81,4 +81,4 @@ class LearningAgent(Agent):
               next_obs: np.ndarray,
               next_h_state: np.ndarray,
               learn_info: dict):
-        self.learner.update(next_obs, next_h_state, learn_info)
+        self.learner.learn(next_obs, next_h_state, learn_info)
