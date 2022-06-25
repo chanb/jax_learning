@@ -4,9 +4,9 @@ import equinox as eqx
 import jax.random as jrandom
 import numpy as np
 
-from jax_learning.agents.agents import LearningAgent
-from jax_learning.buffers.buffers import ReplayBuffer
-from jax_learning.learners.learners import Learner
+from jax_learning.agents import LearningAgent
+from jax_learning.buffers import ReplayBuffer
+from jax_learning.learners import Learner
 
 
 class EpsilonGreedyAgent(LearningAgent):

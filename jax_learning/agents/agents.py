@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod, abstractproperty
 from typing import Tuple
 
-from jax_learning.buffers.buffers import ReplayBuffer
+from jax_learning.buffers import ReplayBuffer
 from jax_learning.constants import RESET
-from jax_learning.learners.learners import Learner
+from jax_learning.learners import Learner
 
 import equinox as eqx
 import numpy as np

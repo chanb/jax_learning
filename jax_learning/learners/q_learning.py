@@ -7,9 +7,9 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from jax_learning.buffers.buffers import ReplayBuffer
+from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
-from jax_learning.learners.learners import LearnerWithTargetNetwork
+from jax_learning.learners import LearnerWithTargetNetwork
 from jax_learning.losses.value_loss import q_learning_td_error
 
 LOSS = "loss"

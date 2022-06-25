@@ -1,15 +1,15 @@
 from typing import Sequence, Tuple, Optional
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 
-from jax_learning.models.models import Policy, ActionValue, MLP
+from jax_learning.distributions import Categorical
+from jax_learning.models import StochasticPolicy, ActionValue, MLP
 
 
-class SoftmaxQ(Policy, ActionValue):
+class SoftmaxQ(StochasticPolicy, ActionValue):
     obs_dim: int
     act_dim: int
 
@@ -31,8 +31,18 @@ class SoftmaxQ(Policy, ActionValue):
                       h_state: np.ndarray,
                       key: jrandom.PRNGKey) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         q_val, h_state = self.q_values(obs, h_state)
-        acts = jrandom.categorical(key=key, logits=q_val, axis=-1)
-        return acts, h_state
+        act = Categorical(q_val).sample(key)
+        return act, h_state
+
+    def act_lprob(self,
+                  obs: np.ndarray,
+                  h_state: np.ndarray,
+                  key: jrandom.PRNGKey) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        q_val, h_state = self.q_values(obs, h_state)
+        dist = Categorical(q_val)
+        act = dist.sample(key)
+        lprob = dist.lprob
+        return act, lprob, h_state
 
 
 class MLPSoftmaxQ(SoftmaxQ):
@@ -51,5 +61,5 @@ class MLPSoftmaxQ(SoftmaxQ):
                  obs: np.ndarray,
                  h_state: np.ndarray,
                  act: Optional[np.ndarray]=None) -> Tuple[np.ndarray, np.ndarray]:
-        qs = self.q_function(obs)
-        return qs, h_state
+        q_val = self.q_function(obs)
+        return q_val, h_state

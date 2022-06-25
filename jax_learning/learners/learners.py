@@ -7,7 +7,7 @@ import jax
 import numpy as np
 import optax
 
-from jax_learning.buffers.buffers import ReplayBuffer
+from jax_learning.buffers import ReplayBuffer
 
 
 class Learner:

@@ -14,13 +14,22 @@ class Policy(eqx.Module):
                              obs: np.ndarray,
                              h_state: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         pass
-    
+
+
+class StochasticPolicy(Policy):
     @abstractmethod
     def random_action(self,
                       obs: np.ndarray,
                       h_state: np.ndarray,
                       key: jrandom.PRNGKey) -> Tuple[np.ndarray, np.ndarray]:
         pass
+
+    @abstractmethod
+    def act_lprob(self,
+                  obs: np.ndarray,
+                  h_state: np.ndarray,
+                  key: jrandom.PRNGKey) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        raise NotImplementedError
 
 
 class ActionValue(eqx.Module):

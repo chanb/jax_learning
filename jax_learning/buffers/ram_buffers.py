@@ -5,7 +5,7 @@ import gzip
 import numpy as np
 import os
 
-from jax_learning.buffers.buffers import (
+from jax_learning.buffers import (
     ReplayBuffer,
     CheckpointIndexError,
     NoSampleError,
