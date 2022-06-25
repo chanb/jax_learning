@@ -41,7 +41,7 @@ class Categorical(Distribution):
 
     @eqx.filter_jit
     def lprob(self, x: np.ndarray) -> np.ndarray:
-        return jax.nn.softmax(self.logits, axis=-1)[x]
+        return self.logits[x] - jax.scipy.special.logsumexp(self.logits, axis=-1, keepdims=True)
 
 
 class Normal(Distribution):
