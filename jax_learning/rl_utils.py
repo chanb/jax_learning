@@ -2,6 +2,8 @@ import sys
 import timeit
 import wandb
 
+import numpy as np
+
 import jax_learning.constants as c
 
 
@@ -10,6 +12,10 @@ def interact(env, agent, cfg):
     log_interval = cfg.log_interval
     render = env.render if cfg.render else lambda: None
     env_rng = cfg.env_rng
+    clip_action = getattr(cfg, "clip_action", False)
+    if clip_action:
+        max_action = cfg.max_action
+        min_action = cfg.min_action
     
     obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
     h_state = agent.reset()
@@ -22,7 +28,10 @@ def interact(env, agent, cfg):
             c.TIMESTEP: timestep_i,
         }
         act, next_h_state = agent.compute_action(obs, h_state, timestep_dict)
-        next_obs, rew, done, info = env.step(act)
+        env_act = act
+        if clip_action:
+            env_act = np.clip(act, min_action, max_action)
+        next_obs, rew, done, info = env.step(env_act)
         render()
         agent.store(obs, h_state, act, rew, done, info, next_obs, next_h_state)
         agent.learn(next_obs, next_h_state, timestep_dict)
@@ -52,6 +61,10 @@ def evaluate(env, agent, cfg):
     max_episodes = cfg.max_episodes
     render = env.render if cfg.render else lambda: None
     env_rng = cfg.env_rng
+    clip_action = getattr(cfg, "clip_action", False)
+    if clip_action:
+        max_action = cfg.max_action
+        min_action = cfg.min_action
 
     for ep_i in range(max_episodes):
         obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
@@ -64,7 +77,10 @@ def evaluate(env, agent, cfg):
                 f"eval_{c.TIMESTEP}": ep_len
             }
             act, h_state = agent.deterministic_action(obs, h_state, timestep_dict)
-            obs, rew, done, info = env.step(act)
+            env_act = act
+            if clip_action:
+                env_act = np.clip(act, min_action, max_action)
+            obs, rew, done, info = env.step(env_act)
             render()
             ep_return += rew
             ep_len += 1
