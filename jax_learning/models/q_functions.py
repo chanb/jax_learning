@@ -24,7 +24,7 @@ class SoftmaxQ(Policy, ActionValue):
                              h_state: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         q_val, h_state = self.q_values(obs, h_state)
         act = jnp.argmax(q_val, axis=-1)
-        return act, q_val[act].reshape((1,)), h_state
+        return act, h_state
     
     def random_action(self,
                       obs: np.ndarray,
@@ -32,8 +32,8 @@ class SoftmaxQ(Policy, ActionValue):
                       key: jrandom.PRNGKey) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         q_val, h_state = self.q_values(obs, h_state)
         acts = jrandom.categorical(key=key, logits=q_val, axis=-1)
-        return acts, q_val[acts].reshape((1,)), h_state
-    
+        return acts, h_state
+
 
 class MLPSoftmaxQ(SoftmaxQ):
     q_function: eqx.Module

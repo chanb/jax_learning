@@ -12,14 +12,14 @@ class Policy(eqx.Module):
     @abstractmethod
     def deterministic_action(self,
                              obs: np.ndarray,
-                             h_state: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                             h_state: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         pass
     
     @abstractmethod
     def random_action(self,
                       obs: np.ndarray,
                       h_state: np.ndarray,
-                      key: jrandom.PRNGKey) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                      key: jrandom.PRNGKey) -> Tuple[np.ndarray, np.ndarray]:
         pass
 
 

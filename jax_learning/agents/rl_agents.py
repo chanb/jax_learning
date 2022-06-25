@@ -31,7 +31,7 @@ class EpsilonGreedyAgent(LearningAgent):
                              obs: np.ndarray,
                              h_state: np.ndarray,
                              info: dict) -> Tuple[np.ndarray ,np.ndarray]:
-        action, val, next_h_state = self.model.deterministic_action(obs, h_state)
+        action, next_h_state = self.model.deterministic_action(obs, h_state)
         return np.asarray(action), np.asarray(next_h_state)
         
     def compute_action(self,
@@ -45,7 +45,7 @@ class EpsilonGreedyAgent(LearningAgent):
             action = jrandom.randint(curr_key, shape=(1,), minval=0, maxval=val.shape[-1]).item()
             info["exploration_strategy"] = 0
         else:
-            action, val, next_h_state = self.model.deterministic_action(obs, h_state)
+            action, next_h_state = self.model.deterministic_action(obs, h_state)
             info["exploration_strategy"] = 1
 
         if overwrite_rng_key:
