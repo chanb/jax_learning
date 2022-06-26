@@ -2,6 +2,12 @@ import jax.numpy as jnp
 import numpy as np
 
 
+def monte_carlo_returns(rews, dones, gamma):
+    rets = np.zeros(rews.shape[0] + 1)
+    for step in reversed(range(len(rews))):
+        rets[step] = rets[step + 1] * gamma * (1 - dones[step]) + rews[step]
+    return rets[:-1]
+
 def q_learning_td_error(q_curr_pred: np.ndarray,
                         act: np.ndarray,
                         q_next_pred: np.ndarray,

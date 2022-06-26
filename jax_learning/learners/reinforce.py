@@ -12,6 +12,7 @@ from jax_learning.buffers.utils import to_jnp, batch_flatten
 from jax_learning.distributions.utils import get_lprob
 from jax_learning.learners import Learner
 from jax_learning.losses.policy_loss import reinforce_score_function
+from jax_learning.losses.value_loss import monte_carlo_returns
 
 POLICY = "policy"
 LOSS = "loss"
@@ -66,12 +67,6 @@ class REINFORCE(Learner):
             model = eqx.apply_updates(model, updates)
             return model, opt_state, grads, learn_info
         self.step = eqx.filter_jit(step)
-        
-    def compute_returns(self, rews, dones):
-        rets = np.zeros(rews.shape[0] + 1)
-        for step in reversed(range(len(rews))):
-            rets[step] = rets[step + 1] * self._gamma * (1 - dones[step]) + rews[step]
-        return rets[:-1]
 
     def learn(self,
               next_obs: np.ndarray,
@@ -85,7 +80,7 @@ class REINFORCE(Learner):
         obss, h_states, acts, rews, dones, _, _, _ = self.buffer.sample(batch_size=self._update_frequency,
                                                                         idxes=self._sample_idxes)
 
-        rets = self.compute_returns(rews, dones)
+        rets = monte_carlo_returns(rews, dones, self._gamma)
         (obss, h_states, acts, rets) = to_jnp(*batch_flatten(obss,
                                                              h_states,
                                                              acts,
