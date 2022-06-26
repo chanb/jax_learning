@@ -83,6 +83,10 @@ class REINFORCE(Learner):
             obss = self.obs_rms.normalize(obss)
 
         rets = monte_carlo_returns(rews, dones, self._gamma)
+        if self.val_rms:
+            self.val_rms.update(rets)
+            rets = self.val_rms.normalize(rets)
+
         (obss, h_states, acts, rets) = to_jnp(*batch_flatten(obss,
                                                              h_states,
                                                              acts,
