@@ -1,5 +1,6 @@
 from typing import Sequence, Tuple
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
