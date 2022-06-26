@@ -51,6 +51,11 @@ class MLP(eqx.Module):
                  hidden_dim: int,
                  num_hidden: int,
                  key: jrandom.PRNGKey):
+        if num_hidden == 0:
+            self.weights = [eqx.nn.Linear(in_dim, out_dim, use_bias=False, key=key)]
+            self.biases = [jnp.zeros(out_dim)]
+            return
+
         self.weights = [eqx.nn.Linear(in_dim, hidden_dim, use_bias=False, key=key)]
         self.biases = [jnp.zeros(hidden_dim)]
         for _ in range(num_hidden - 1):
