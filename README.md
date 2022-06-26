@@ -23,3 +23,16 @@ Running `wandb` local instance:
 - Docker: https://www.docker.com/
 - Weights & Biases Local: https://github.com/wandb/local
 
+## Citation
+Please consider citing this repository if you use/extend this codebase in your work:
+```
+@misc{jax_learning,
+  author = {Chan, Bryan},
+  title = {JAX Learning},
+  year = {2022},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/chanb/jax_learning}},
+}
+```
+
