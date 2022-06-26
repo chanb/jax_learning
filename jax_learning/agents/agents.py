@@ -72,10 +72,24 @@ class LearningAgent(Agent):
                  learner: Learner):
         super().__init__(model, buffer)
         self._learner = learner
+        self._obs_rms = learner.obs_rms
 
     @property
     def learner(self):
         return self._learner
+
+    def store(self,
+              obs: np.ndarray,
+              h_state: np.ndarray,
+              act: np.ndarray,
+              rew: float,
+              done: bool,
+              info: dict,
+              next_obs: np.ndarray,
+              next_h_state: np.ndarray):
+        if self._obs_rms:
+            self._obs_rms.update(obs)
+        self._buffer.push(obs, h_state, act, rew, done, info, next_obs, next_h_state)
 
     def learn(self,
               next_obs: np.ndarray,

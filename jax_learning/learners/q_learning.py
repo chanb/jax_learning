@@ -126,6 +126,8 @@ class QLearning(LearnerWithTargetNetwork):
                                                                                                                     next_obs=next_obs,
                                                                                                                     next_h_state=next_h_state)
 
+            if self.obs_rms:
+                obss = self.obs_rms.normalize(obss)
             acts = acts.astype(np.int64)
             gammas = np.ones(self._batch_size) * self._gamma
             

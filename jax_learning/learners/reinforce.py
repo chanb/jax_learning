@@ -79,6 +79,8 @@ class REINFORCE(Learner):
 
         obss, h_states, acts, rews, dones, _, _, _ = self.buffer.sample(batch_size=self._update_frequency,
                                                                         idxes=self._sample_idxes)
+        if self.obs_rms:
+            obss = self.obs_rms.normalize(obss)
 
         rets = monte_carlo_returns(rews, dones, self._gamma)
         (obss, h_states, acts, rets) = to_jnp(*batch_flatten(obss,

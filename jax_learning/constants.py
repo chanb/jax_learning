@@ -21,3 +21,7 @@ RESET = "reset"
 
 CONTINUOUS = "continuous"
 DISCRETE = "discrete"
+
+NORMALIZE_OBS = "normalize_obs"
+
+EXPLORATION_STRATEGY = "exploration_strategy"

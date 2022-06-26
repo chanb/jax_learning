@@ -8,6 +8,8 @@ import numpy as np
 import optax
 
 from jax_learning.buffers import ReplayBuffer
+from jax_learning.common import RunningMeanStd
+from jax_learning.constants import NORMALIZE_OBS
 
 
 class Learner:
@@ -21,6 +23,10 @@ class Learner:
         self._opt_state = {model_key: model_opt.init(model[model_key]) for model_key, model_opt in self._opt.items()}
         self._buffer = buffer
         self._cfg = cfg
+
+        self._obs_rms = False
+        if getattr(self._cfg, NORMALIZE_OBS, False):
+            self._obs_rms = RunningMeanStd(shape=cfg.obs_dim)
 
     @property
     def buffer(self):
@@ -41,6 +47,10 @@ class Learner:
     @property
     def cfg(self):
         return self._cfg
+
+    @property
+    def obs_rms(self):
+        return self._obs_rms
 
     @abstractmethod
     def learn(self,
