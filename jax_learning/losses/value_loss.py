@@ -2,7 +2,9 @@ import jax.numpy as jnp
 import numpy as np
 
 
-def monte_carlo_returns(rews, dones, gamma):
+def monte_carlo_returns(rews: np.ndarray,
+                        dones: np.ndarray,
+                        gamma: float) -> np.ndarray:
     rets = np.zeros(rews.shape[0] + 1)
     for step in reversed(range(len(rews))):
         rets[step] = rets[step + 1] * gamma * (1 - dones[step]) + rews[step]
