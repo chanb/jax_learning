@@ -12,12 +12,15 @@ from jax_learning.models import StochasticPolicy, ActionValue, MLP
 class SoftmaxQ(StochasticPolicy, ActionValue):
     obs_dim: int
     act_dim: int
+    q_function: ActionValue
 
     def __init__(self,
                  obs_dim: Sequence[int],
-                 act_dim: Sequence[int]):
+                 act_dim: Sequence[int],
+                 q_function: ActionValue):
         self.obs_dim = int(np.product(obs_dim))
         self.act_dim = int(np.product(act_dim))
+        self.q_function = q_function
 
     def deterministic_action(self,
                              obs: np.ndarray,
@@ -44,8 +47,16 @@ class SoftmaxQ(StochasticPolicy, ActionValue):
         lprob = dist.lprob
         return act, lprob, h_state
 
+    def q_values(self,
+                 obs: np.ndarray,
+                 h_state: np.ndarray,
+                 act: Optional[np.ndarray]=None) -> Tuple[np.ndarray, np.ndarray]:
+        return self.q_function.q_values(obs, h_state, act)
 
-class MLPSoftmaxQ(SoftmaxQ):
+
+class MLPQ(ActionValue):
+    obs_dim: int
+    act_dim: int
     q_function: eqx.Module
 
     def __init__(self,
@@ -54,7 +65,8 @@ class MLPSoftmaxQ(SoftmaxQ):
                  hidden_dim: int,
                  num_hidden: int,
                  key: jrandom.PRNGKey):
-        super().__init__(obs_dim, act_dim)
+        self.obs_dim = int(np.product(obs_dim))
+        self.act_dim = int(np.product(act_dim))
         self.q_function = MLP(self.obs_dim, self.act_dim, hidden_dim, num_hidden, key)
 
     def q_values(self,

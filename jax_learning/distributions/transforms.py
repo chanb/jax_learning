@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import abstractmethod, abstractstaticmethod
 
 import equinox as eqx
 import jax
@@ -7,12 +7,11 @@ import numpy as np
 
 
 class Transform(eqx.Module):
-    @abstractmethod
-    def transform(self,
-                  x: np.ndarray) -> np.ndarray:
+    @abstractstaticmethod
+    def transform(x: np.ndarray) -> np.ndarray:
         pass
 
-    @abstractmethod
+    @abstractstaticmethod
     def log_abs_det_jacobian(self,
                              x: np.ndarray,
                              x_t: np.ndarray) -> np.ndarray:
@@ -20,11 +19,9 @@ class Transform(eqx.Module):
 
 
 class TanhTransform(Transform):
-    def transform(self,
-                  x: np.ndarray) -> np.ndarray:
+    def transform(x: np.ndarray) -> np.ndarray:
         return jax.nn.tanh(x)
 
-    def log_abs_det_jacobian(self,
-                             x: np.ndarray,
+    def log_abs_det_jacobian(x: np.ndarray,
                              x_t: np.ndarray) -> np.ndarray:
         return 2. * (math.log(2.) - x - jax.nn.softplus(-2. * x))

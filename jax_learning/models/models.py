@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Tuple, Optional, Sequence
+from typing import Tuple, Optional, Sequence, Callable, Any
 
 import equinox as eqx
 import jax
@@ -8,7 +8,15 @@ import jax.random as jrandom
 import numpy as np
 
 
-class Policy(eqx.Module):
+class Model(eqx.Module):
+    @staticmethod
+    def apply_function(func: Callable,
+                       *args: Sequence[Any],
+                       **kwargs: dict):
+        return func(*args, **kwargs)
+
+
+class Policy(Model):
     @abstractmethod
     def deterministic_action(self,
                              obs: np.ndarray,
@@ -32,7 +40,7 @@ class StochasticPolicy(Policy):
         raise NotImplementedError
 
 
-class ActionValue(eqx.Module):
+class ActionValue(Model):
     @abstractmethod
     def q_values(self,
                  obs: np.ndarray,
