@@ -35,12 +35,12 @@ class REINFORCE(Learner):
         self._gamma = cfg.gamma
         
         @eqx.filter_grad(has_aux=True)
-        def reinforce_loss(model: eqx.Module,
+        def reinforce_loss(policy: eqx.Module,
                            obss: np.ndarray,
                            h_states: np.ndarray,
                            acts: np.ndarray,
                            rets: np.ndarray) -> Tuple[np.ndarray, dict]:
-            dists = jax.vmap(model.dist)(obss, h_states)
+            dists = jax.vmap(policy.dist)(obss, h_states)
             lprobs = jax.vmap(get_lprob)(dists, acts)
             scores = jax.vmap(reinforce_score_function)(lprobs, rets)
             loss = -jnp.mean(scores)
@@ -50,22 +50,22 @@ class REINFORCE(Learner):
                 MIN_RETURN: jnp.min(rets),
             }
         
-        def step(model: eqx.Module,
+        def step(policy: eqx.Module,
                  opt: optax.GradientTransformation,
                  opt_state: optax.OptState,
                  obss: np.ndarray,
                  h_states: np.ndarray,
                  acts: np.ndarray,
                  rets: np.ndarray) -> Tuple[eqx.Module, optax.OptState, jax.tree_util.PyTreeDef, dict]:
-            grads, learn_info = reinforce_loss(model,
+            grads, learn_info = reinforce_loss(policy,
                                                obss,
                                                h_states,
                                                acts,
                                                rets)
 
             updates, opt_state = opt.update(grads, opt_state)
-            model = eqx.apply_updates(model, updates)
-            return model, opt_state, grads, learn_info
+            policy = eqx.apply_updates(policy, updates)
+            return policy, opt_state, grads, learn_info
         self.step = eqx.filter_jit(step)
 
     def learn(self,
@@ -91,15 +91,15 @@ class REINFORCE(Learner):
                                                              h_states,
                                                              acts,
                                                              rets))
-        model, opt_state, grads, curr_learn_info = self.step(model=self.model[POLICY],
-                                                             opt=self.opt[POLICY],
-                                                             opt_state=self.opt_state[POLICY],
-                                                             obss=obss,
-                                                             h_states=h_states,
-                                                             acts=acts,
-                                                             rets=rets)
+        policy, opt_state, grads, curr_learn_info = self.step(model=self.model[POLICY],
+                                                              opt=self.opt[POLICY],
+                                                              opt_state=self.opt_state[POLICY],
+                                                              obss=obss,
+                                                              h_states=h_states,
+                                                              acts=acts,
+                                                              rets=rets)
 
-        self._model[POLICY] = model
+        self._model[POLICY] = policy
         self._opt_state[POLICY] = opt_state
 
         learn_info[MEAN_LOSS] = curr_learn_info[LOSS].item()

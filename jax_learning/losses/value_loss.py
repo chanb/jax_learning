@@ -10,11 +10,11 @@ def monte_carlo_returns(rews: np.ndarray,
         rets[step] = rets[step + 1] * gamma * (1 - dones[step]) + rews[step]
     return rets[:-1]
 
-def q_learning_td_error(q_curr_pred: np.ndarray,
+def q_learning_td_error(curr_q_pred: np.ndarray,
                         act: np.ndarray,
-                        q_next_pred: np.ndarray,
+                        next_q_pred: np.ndarray,
                         rew: np.ndarray,
                         done: np.ndarray,
                         gamma: np.ndarray) -> np.ndarray:
-    q_target = rew + (1 - done) * (gamma * jnp.max(q_next_pred))
-    return q_curr_pred[act] - q_target
+    q_target = rew + (1 - done) * (gamma * jnp.max(next_q_pred))
+    return curr_q_pred[act] - q_target
