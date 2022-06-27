@@ -1,5 +1,5 @@
 import numpy as np
 
 
-def reinforce_score_function(lprob: np.ndarray, ret: np.ndarray) -> np.ndarray:
-    return lprob * ret
+def reinforce_loss(lprob: np.ndarray, ret: np.ndarray) -> np.ndarray:
+    return -lprob * ret
