@@ -7,7 +7,7 @@ import numpy as np
 from jax_learning.agents import LearningAgent
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.constants import EXPLORATION_STRATEGY
-from jax_learning.learners import Learner
+from jax_learning.learners import ReinforcementLearner
 
 
 class RLAgent(LearningAgent):
@@ -15,7 +15,7 @@ class RLAgent(LearningAgent):
                  model: Dict[str, eqx.Module],
                  model_key: str,
                  buffer: ReplayBuffer,
-                 learner: Learner,
+                 learner: ReinforcementLearner,
                  key: jrandom.PRNGKey):
         super().__init__(model, buffer, learner)
         self._model_key = model_key
@@ -49,7 +49,7 @@ class EpsilonGreedyAgent(RLAgent):
                  model: Dict[str, eqx.Module],
                  model_key: str,
                  buffer: ReplayBuffer,
-                 learner: Learner,
+                 learner: ReinforcementLearner,
                  init_eps: float,
                  min_eps: float,
                  eps_decay: float,

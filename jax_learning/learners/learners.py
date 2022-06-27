@@ -12,7 +12,7 @@ from jax_learning.common import RunningMeanStd, polyak_average_generator
 from jax_learning.constants import NORMALIZE_OBS, NORMALIZE_VALUE
 
 
-class Learner:
+class ReinforcementLearner:
     def __init__(self,
                  model: Dict[str, eqx.Module],
                  opt: Dict[str, optax.GradientTransformation],
@@ -23,6 +23,10 @@ class Learner:
         self._opt_state = {model_key: model_opt.init(model[model_key]) for model_key, model_opt in self._opt.items()}
         self._buffer = buffer
         self._cfg = cfg
+
+        self._step = cfg.load_step
+        self._gamma = cfg.gamma
+        self._update_frequency = cfg.update_frequency
 
         self._obs_rms = False
         self._val_rms = False
@@ -67,7 +71,7 @@ class Learner:
         raise NotImplementedError
 
 
-class LearnerWithTargetNetwork(Learner):
+class LearnerWithTargetNetwork(ReinforcementLearner):
     def __init__(self,
                  model: Dict[str, eqx.Module],
                  target_model: Dict[str, eqx.Module],
@@ -76,6 +80,7 @@ class LearnerWithTargetNetwork(Learner):
                  cfg: Namespace):
         super().__init__(model, opt, buffer, cfg)
         self._target_model = target_model
+        self._target_update_frequency = cfg.target_update_frequency
         self._tau = cfg.tau
         self.polyak_average = polyak_average_generator(self._tau)
     

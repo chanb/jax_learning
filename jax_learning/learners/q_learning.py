@@ -9,6 +9,7 @@ import optax
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
+from jax_learning.common import polyak_average_generator
 from jax_learning.learners import LearnerWithTargetNetwork
 from jax_learning.losses.value_loss import q_learning_td_error
 
@@ -33,15 +34,10 @@ class QLearning(LearnerWithTargetNetwork):
                  buffer: ReplayBuffer,
                  cfg: Namespace):
         super().__init__(model, target_model, opt, buffer, cfg)
-        
-        self._step = cfg.load_step
+
         self._batch_size = cfg.batch_size
         self._buffer_warmup = cfg.buffer_warmup
         self._num_gradient_steps = cfg.num_gradient_steps
-        self._gamma = cfg.gamma
-        self._update_frequency = cfg.update_frequency
-        self._target_update_frequency = cfg.target_update_frequency
-        self._omega = cfg.omega
         self._q_learning_td_error = jax.vmap(q_learning_td_error, in_axes=[0, 0, 0, 0, 0, None])
 
         @eqx.filter_grad(has_aux=True)
@@ -52,13 +48,12 @@ class QLearning(LearnerWithTargetNetwork):
                             rews: np.ndarray,
                             dones: np.ndarray,
                             next_obss: np.ndarray,
-                            next_h_states: np.ndarray,
-                            gammas: np.ndarray) -> Tuple[np.ndarray, dict]:
+                            next_h_states: np.ndarray) -> Tuple[np.ndarray, dict]:
             (q, target_q) = models
             curr_q_preds, _ = jax.vmap(q.q_values)(obss, h_states)
             next_q_preds, _ = jax.vmap(target_q.q_values)(next_obss, next_h_states)
             
-            td_errors = self._q_learning_td_error(curr_q_preds, acts, next_q_preds, rews, dones, gammas)
+            td_errors = self._q_learning_td_error(curr_q_preds, acts, next_q_preds, rews, dones, self._gamma)
             loss = jnp.mean(td_errors ** 2)
             return loss, {
                 LOSS: loss,
@@ -72,6 +67,8 @@ class QLearning(LearnerWithTargetNetwork):
                 MIN_TD_ERROR: jnp.min(td_errors),
             }
         
+        apply_residual_gradient = polyak_average_generator(cfg.omega)
+
         def step(q: eqx.Module,
                  target_q: eqx.Module,
                  opt: optax.GradientTransformation,
@@ -82,9 +79,7 @@ class QLearning(LearnerWithTargetNetwork):
                  rews: np.ndarray,
                  dones: np.ndarray,
                  next_obss: np.ndarray,
-                 next_h_states: np.ndarray,
-                 gammas: np.ndarray,
-                 omega: float) -> Tuple[eqx.Module, optax.OptState, Tuple[jax.tree_util.PyTreeDef, jax.tree_util.PyTreeDef, jax.tree_util.PyTreeDef], dict]:
+                 next_h_states: np.ndarray) -> Tuple[eqx.Module, optax.OptState, Tuple[jax.tree_util.PyTreeDef, jax.tree_util.PyTreeDef, jax.tree_util.PyTreeDef], dict]:
             grads, learn_info = q_learning_loss((q, target_q),
                                                 obss,
                                                 h_states,
@@ -92,11 +87,10 @@ class QLearning(LearnerWithTargetNetwork):
                                                 rews,
                                                 dones,
                                                 next_obss,
-                                                next_h_states,
-                                                gammas)
+                                                next_h_states)
 
             (q_grads, target_q_grads) = grads
-            grads = jax.tree_map(lambda g, tg: g * omega + tg * (1 - omega),
+            grads = jax.tree_map(apply_residual_gradient,
                                  q_grads,
                                  target_q_grads)
 
@@ -129,16 +123,14 @@ class QLearning(LearnerWithTargetNetwork):
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
             acts = acts.astype(np.int64)
-            gammas = np.ones(self._batch_size) * self._gamma
             
-            (obss, h_states, acts, rews, dones, next_obss, next_h_states, gammas) = to_jnp(*batch_flatten(obss,
-                                                                                                          h_states,
-                                                                                                          acts,
-                                                                                                          rews,
-                                                                                                          dones,
-                                                                                                          next_obss,
-                                                                                                          next_h_states,
-                                                                                                          gammas))
+            (obss, h_states, acts, rews, dones, next_obss, next_h_states) = to_jnp(*batch_flatten(obss,
+                                                                                                  h_states,
+                                                                                                  acts,
+                                                                                                  rews,
+                                                                                                  dones,
+                                                                                                  next_obss,
+                                                                                                  next_h_states))
             q, opt_state, grads, curr_learn_info = self.step(q=self.model[Q],
                                                              target_q=self.target_model[Q],
                                                              opt=self.opt[Q],
@@ -149,9 +141,7 @@ class QLearning(LearnerWithTargetNetwork):
                                                              rews=rews,
                                                              dones=dones,
                                                              next_obss=next_obss,
-                                                             next_h_states=next_h_states,
-                                                             gammas=gammas,
-                                                             omega=self._omega)
+                                                             next_h_states=next_h_states)
 
             self._model[Q] = q
             self._opt_state[Q] = opt_state

@@ -10,7 +10,7 @@ import optax
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
 from jax_learning.distributions.utils import get_lprob
-from jax_learning.learners import Learner
+from jax_learning.learners import ReinforcementLearner
 from jax_learning.losses.policy_loss import reinforce_score_function
 from jax_learning.losses.value_loss import monte_carlo_returns
 
@@ -21,7 +21,7 @@ MAX_RETURN = "max_return"
 MIN_RETURN = "min_return"
 
 
-class REINFORCE(Learner):
+class REINFORCE(ReinforcementLearner):
     def __init__(self,
                  model: Dict[str, eqx.Module],
                  opt: Dict[str, optax.GradientTransformation],
@@ -29,10 +29,7 @@ class REINFORCE(Learner):
                  cfg: Namespace):
         super().__init__(model, opt, buffer, cfg)
         
-        self._step = cfg.load_step
-        self._update_frequency = cfg.update_frequency
-        self._sample_idxes = np.arange(cfg.update_frequency)
-        self._gamma = cfg.gamma
+        self._sample_idxes = np.arange(self._update_frequency)
         
         @eqx.filter_grad(has_aux=True)
         def reinforce_loss(policy: eqx.Module,

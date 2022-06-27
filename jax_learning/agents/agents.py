@@ -3,7 +3,7 @@ from typing import Tuple
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.constants import RESET
-from jax_learning.learners import Learner
+from jax_learning.learners import ReinforcementLearner
 
 import equinox as eqx
 import numpy as np
@@ -69,7 +69,7 @@ class LearningAgent(Agent):
     def __init__(self,
                  model: eqx.Module,
                  buffer: ReplayBuffer,
-                 learner: Learner):
+                 learner: ReinforcementLearner):
         super().__init__(model, buffer)
         self._learner = learner
         self._obs_rms = learner.obs_rms
