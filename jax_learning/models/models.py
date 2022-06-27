@@ -14,6 +14,19 @@ class Model(eqx.Module):
         return func(*args, **kwargs)
 
 
+class Temperature(Model):
+    log_alpha: float
+
+    def __init__(
+        self,
+        init_alpha: float=1.0,
+    ):
+        self.log_alpha = jnp.log(init_alpha)
+
+    def __call__(self):
+        return jnp.exp(self.log_alpha)
+
+
 class Policy(Model):
     @abstractmethod
     def deterministic_action(

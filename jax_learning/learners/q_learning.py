@@ -25,6 +25,7 @@ MIN_NEXT_Q = "min_next_q"
 MAX_TD_ERROR = "max_td_error"
 MIN_TD_ERROR = "min_td_error"
 Q = "q"
+OMEGA = "omega"
 
 
 class QLearning(LearnerWithTargetNetwork):
@@ -76,9 +77,9 @@ class QLearning(LearnerWithTargetNetwork):
                 MIN_TD_ERROR: jnp.min(td_errors),
             }
 
-        apply_residual_gradient = polyak_average_generator(getattr(cfg, "omega", 1.0))
+        apply_residual_gradient = polyak_average_generator(getattr(cfg, OMEGA, 1.0))
 
-        def step(
+        def update_q(
             q: ActionValue,
             target_q: ActionValue,
             opt: optax.GradientTransformation,
@@ -118,7 +119,7 @@ class QLearning(LearnerWithTargetNetwork):
             q = eqx.apply_updates(q, updates)
             return q, opt_state, (grads, q_grads, target_q_grads), learn_info
 
-        self.step = eqx.filter_jit(step)
+        self.update_q = eqx.filter_jit(update_q)
 
     def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
         self._step += 1
@@ -163,7 +164,7 @@ class QLearning(LearnerWithTargetNetwork):
                     obss, h_states, acts, rews, dones, next_obss, next_h_states
                 )
             )
-            q, opt_state, grads, curr_learn_info = self.step(
+            q, opt_state, grads, curr_learn_info = self.update_q(
                 q=self.model[Q],
                 target_q=self.target_model[Q],
                 opt=self.opt[Q],

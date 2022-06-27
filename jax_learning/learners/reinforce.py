@@ -11,7 +11,7 @@ from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
 from jax_learning.distributions.utils import get_lprob
 from jax_learning.learners import ReinforcementLearner
-from jax_learning.losses.policy_loss import reinforce_score_function
+from jax_learning.losses.policy_loss import reinforce_loss
 from jax_learning.losses.value_loss import monte_carlo_returns
 from jax_learning.models import StochasticPolicy
 
@@ -44,15 +44,14 @@ class REINFORCE(ReinforcementLearner):
         ) -> Tuple[np.ndarray, dict]:
             dists = jax.vmap(policy.dist)(obss, h_states)
             lprobs = jax.vmap(get_lprob)(dists, acts)
-            scores = jax.vmap(reinforce_score_function)(lprobs, rets)
-            loss = -jnp.mean(scores)
+            loss = jnp.mean(jax.vmap(reinforce_loss)(lprobs, rets))
             return loss, {
                 LOSS: loss,
                 MAX_RETURN: jnp.max(rets),
                 MIN_RETURN: jnp.min(rets),
             }
 
-        def step(
+        def update_policy(
             policy: StochasticPolicy,
             opt: optax.GradientTransformation,
             opt_state: optax.OptState,
@@ -67,7 +66,7 @@ class REINFORCE(ReinforcementLearner):
             policy = eqx.apply_updates(policy, updates)
             return policy, opt_state, grads, learn_info
 
-        self.step = eqx.filter_jit(step)
+        self.update_policy = eqx.filter_jit(update_policy)
 
     def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
         self._step += 1
@@ -89,7 +88,7 @@ class REINFORCE(ReinforcementLearner):
         (obss, h_states, acts, rets) = to_jnp(
             *batch_flatten(obss, h_states, acts, rets)
         )
-        policy, opt_state, grads, curr_learn_info = self.step(
+        policy, opt_state, grads, curr_learn_info = self.update_policy(
             policy=self.model[POLICY],
             opt=self.opt[POLICY],
             opt_state=self.opt_state[POLICY],
