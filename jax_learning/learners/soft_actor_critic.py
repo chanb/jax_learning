@@ -34,67 +34,79 @@ MIN_TD_ERROR = "min_td_error"
 POLICY = "policy"
 Q = "q"
 TEMPERATURE = "temperature"
+MEAN_TEMPERATURE = "mean_temperature"
 TARGET_ENTROPY = "target_entropy"
 OMEGA = "omega"
 
 
 class SAC(LearnerWithTargetNetwork):
-    def __init__(self,
-                 model: Dict[str, eqx.Module],
-                 target_model: Dict[str, eqx.Module],
-                 opt: Dict[str, optax.GradientTransformation],
-                 buffer: ReplayBuffer,
-                 cfg: Namespace):
+    def __init__(
+        self,
+        model: Dict[str, eqx.Module],
+        target_model: Dict[str, eqx.Module],
+        opt: Dict[str, optax.GradientTransformation],
+        buffer: ReplayBuffer,
+        cfg: Namespace,
+    ):
         super().__init__(model, target_model, opt, buffer, cfg)
-        
+
         self._batch_size = cfg.batch_size
         self._num_gradient_steps = cfg.num_gradient_steps
-        
+
         self._buffer_warmup = cfg.buffer_warmup
         self._actor_update_frequency = cfg.actor_update_frequency
         self._target_update_frequency = cfg.target_update_frequency
-        
+
         self._target_entropy = getattr(cfg, TARGET_ENTROPY, None)
         self._sample_key = jrandom.PRNGKey(cfg.seed)
-        
-        _clipped_min_q_td_error = jax.vmap(clipped_min_q_td_error, in_axes=[0, 0, 0, 0, 0, None, None])
+
+        _clipped_min_q_td_error = jax.vmap(
+            clipped_min_q_td_error, in_axes=[0, 0, 0, 0, 0, None, None]
+        )
 
         @eqx.filter_grad(has_aux=True)
-        def q_loss(models: Tuple[ActionValue, ActionValue],
-                   policy: StochasticPolicy,
-                   temperature: Temperature,
-                   obss: np.ndarray,
-                   h_states: np.ndarray,
-                   acts: np.ndarray,
-                   rews: np.ndarray,
-                   dones: np.ndarray,
-                   next_obss: np.ndarray,
-                   next_h_states: np.ndarray,
-                   keys: Sequence[jrandom.PRNGKey]) -> Tuple[np.ndarray, dict]:
+        def q_loss(
+            models: Tuple[ActionValue, ActionValue],
+            policy: StochasticPolicy,
+            temperature: Temperature,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            acts: np.ndarray,
+            rews: np.ndarray,
+            dones: np.ndarray,
+            next_obss: np.ndarray,
+            next_h_states: np.ndarray,
+            keys: Sequence[jrandom.PRNGKey],
+        ) -> Tuple[np.ndarray, dict]:
             (q, target_q) = models
-            
+
             curr_xs = jnp.concatenate((obss, acts), axis=-1)
             curr_q_preds, _ = jax.vmap(q.q_values)(curr_xs, h_states)
-            
-            next_acts, next_lprobs, _ = jax.vmap(policy.act_lprob)(next_obss, next_h_states, keys)
+
+            next_acts, next_lprobs, _ = jax.vmap(policy.act_lprob)(
+                next_obss, next_h_states, keys
+            )
             next_lprobs = jnp.sum(next_lprobs, axis=-1, keepdims=True)
-            
+
             next_xs = jnp.concatenate((next_obss, next_acts), axis=-1)
             next_q_preds, _ = jax.vmap(target_q.q_values)(next_xs, next_h_states)
             next_q_preds_min = jnp.min(next_q_preds, axis=1)
-            
+
             temp = temperature()
-            
+
             def batch_td_errors(curr_q_pred):
-                return _clipped_min_q_td_error(curr_q_pred,
-                                               next_q_preds_min,
-                                               next_lprobs,
-                                               rews,
-                                               dones,
-                                               temp,
-                                               self._gamma)
+                return _clipped_min_q_td_error(
+                    curr_q_pred,
+                    next_q_preds_min,
+                    next_lprobs,
+                    rews,
+                    dones,
+                    temp,
+                    self._gamma,
+                )
+
             td_errors = jax.vmap(batch_td_errors, in_axes=[1])(curr_q_preds)
-            loss = jnp.mean(td_errors ** 2)
+            loss = jnp.mean(td_errors**2)
             return loss, {
                 Q_LOSS: loss,
                 MAX_NEXT_Q: jnp.max(next_q_preds),
@@ -106,140 +118,152 @@ class SAC(LearnerWithTargetNetwork):
                 MAX_TD_ERROR: jnp.max(td_errors),
                 MIN_TD_ERROR: jnp.min(td_errors),
             }
-        
+
         apply_residual_gradient = polyak_average_generator(getattr(cfg, OMEGA, 1.0))
-        
-        def update_q(q: ActionValue,
-                     target_q: ActionValue,
-                     policy: StochasticPolicy,
-                     temperature: Temperature,
-                     opt: optax.GradientTransformation,
-                     opt_state: optax.OptState,
-                     obss: np.ndarray,
-                     h_states: np.ndarray,
-                     acts: np.ndarray,
-                     rews: np.ndarray,
-                     dones: np.ndarray,
-                     next_obss: np.ndarray,
-                     next_h_states: np.ndarray) -> Tuple[ActionValue,
-                                                         optax.OptState,
-                                                         Tuple[jax.tree_util.PyTreeDef,
-                                                               jax.tree_util.PyTreeDef,
-                                                               jax.tree_util.PyTreeDef],
-                                                         dict,
-                                                         jrandom.PRNGKey]:
+
+        def update_q(
+            q: ActionValue,
+            target_q: ActionValue,
+            policy: StochasticPolicy,
+            temperature: Temperature,
+            opt: optax.GradientTransformation,
+            opt_state: optax.OptState,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            acts: np.ndarray,
+            rews: np.ndarray,
+            dones: np.ndarray,
+            next_obss: np.ndarray,
+            next_h_states: np.ndarray,
+        ) -> Tuple[
+            ActionValue,
+            optax.OptState,
+            Tuple[
+                jax.tree_util.PyTreeDef,
+                jax.tree_util.PyTreeDef,
+                jax.tree_util.PyTreeDef,
+            ],
+            dict,
+            jrandom.PRNGKey,
+        ]:
             sample_key = jrandom.split(self._sample_key, num=1)[0]
             keys = jrandom.split(self._sample_key, num=self._batch_size)
-            grads, learn_info = q_loss((q, target_q),
-                                       policy,
-                                       temperature,
-                                       obss,
-                                       h_states,
-                                       acts,
-                                       rews,
-                                       dones,
-                                       next_obss,
-                                       next_h_states,
-                                       keys)
+            grads, learn_info = q_loss(
+                (q, target_q),
+                policy,
+                temperature,
+                obss,
+                h_states,
+                acts,
+                rews,
+                dones,
+                next_obss,
+                next_h_states,
+                keys,
+            )
 
             (q_grads, target_q_grads) = grads
-            grads = jax.tree_map(apply_residual_gradient,
-                                 q_grads,
-                                 target_q_grads)
+            grads = jax.tree_map(apply_residual_gradient, q_grads, target_q_grads)
 
             updates, opt_state = opt.update(grads, opt_state)
             q = eqx.apply_updates(q, updates)
-            return q, opt_state, (grads, q_grads, target_q_grads), learn_info, sample_key
+            return (
+                q,
+                opt_state,
+                (grads, q_grads, target_q_grads),
+                learn_info,
+                sample_key,
+            )
 
         _sac_policy_loss = jax.vmap(sac_policy_loss, in_axes=[0, 0, None])
-        
+
         @eqx.filter_grad(has_aux=True)
-        def policy_loss(policy: StochasticPolicy,
-                        q: ActionValue,
-                        temperature: Temperature,
-                        obss: np.ndarray,
-                        h_states: np.ndarray,
-                        keys: Sequence[jrandom.PRNGKey]) -> Tuple[np.ndarray, dict]:
+        def policy_loss(
+            policy: StochasticPolicy,
+            q: ActionValue,
+            temperature: Temperature,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            keys: Sequence[jrandom.PRNGKey],
+        ) -> Tuple[np.ndarray, dict]:
             acts, lprobs, _ = jax.vmap(policy.act_lprob)(obss, h_states, keys)
             lprobs = jnp.sum(lprobs, axis=-1, keepdims=True)
             curr_xs = jnp.concatenate((obss, acts), axis=-1)
             curr_q_preds, _ = jax.vmap(q.q_values)(curr_xs, h_states)
             curr_q_preds_min = jnp.min(curr_q_preds, axis=1)
             temp = temperature()
-            
+
             loss = jnp.mean(_sac_policy_loss(curr_q_preds_min, lprobs, temp))
             return loss, {
                 POLICY_LOSS: loss,
             }
-        
-        def update_policy(policy: StochasticPolicy,
-                          q: ActionValue,
-                          temperature: Temperature,
-                          opt: optax.GradientTransformation,
-                          opt_state: optax.OptState,
-                          obss: np.ndarray,
-                          h_states: np.ndarray,
-                          acts: np.ndarray) -> Tuple[ActionValue,
-                                                     optax.OptState,
-                                                     jax.tree_util.PyTreeDef,
-                                                     dict,
-                                                     jrandom.PRNGKey]:
+
+        def update_policy(
+            policy: StochasticPolicy,
+            q: ActionValue,
+            temperature: Temperature,
+            opt: optax.GradientTransformation,
+            opt_state: optax.OptState,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            acts: np.ndarray,
+        ) -> Tuple[
+            ActionValue, optax.OptState, jax.tree_util.PyTreeDef, dict, jrandom.PRNGKey
+        ]:
             sample_key = jrandom.split(self._sample_key, num=1)[0]
             keys = jrandom.split(self._sample_key, num=self._batch_size)
-            
-            grads, learn_info = policy_loss(policy,
-                                            q,
-                                            temperature,
-                                            obss,
-                                            h_states,
-                                            keys)
+
+            grads, learn_info = policy_loss(
+                policy, q, temperature, obss, h_states, keys
+            )
 
             updates, opt_state = opt.update(grads, opt_state)
             policy = eqx.apply_updates(policy, updates)
             return policy, opt_state, grads, learn_info, sample_key
 
         _sac_temperature_loss = jax.vmap(sac_temperature_loss, in_axes=[None, 0, None])
-        
+
         @eqx.filter_grad(has_aux=True)
-        def temperature_loss(temperature: Temperature,
-                             policy: StochasticPolicy,
-                             obss: np.ndarray,
-                             h_states: np.ndarray,
-                             keys: Sequence[jrandom.PRNGKey]) -> Tuple[np.ndarray, dict]:
+        def temperature_loss(
+            temperature: Temperature,
+            policy: StochasticPolicy,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            keys: Sequence[jrandom.PRNGKey],
+        ) -> Tuple[np.ndarray, dict]:
             temp = temperature()
             _, lprobs, _ = jax.vmap(policy.act_lprob)(obss, h_states, keys)
             lprobs = jnp.sum(lprobs, axis=-1, keepdims=True)
             loss = jnp.mean(_sac_temperature_loss(temp, lprobs, self._target_entropy))
             return loss, {
                 TEMPERATURE_LOSS: loss,
+                TEMPERATURE: temp,
             }
-        
-        def update_temperature(policy: StochasticPolicy,
-                               temperature: Temperature,
-                               opt: optax.GradientTransformation,
-                               opt_state: optax.OptState,
-                               obss: np.ndarray,
-                               h_states: np.ndarray) -> Tuple[ActionValue,
-                                                              optax.OptState,
-                                                              jax.tree_util.PyTreeDef,
-                                                              dict,
-                                                              jrandom.PRNGKey]:
+
+        def update_temperature(
+            policy: StochasticPolicy,
+            temperature: Temperature,
+            opt: optax.GradientTransformation,
+            opt_state: optax.OptState,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+        ) -> Tuple[
+            ActionValue, optax.OptState, jax.tree_util.PyTreeDef, dict, jrandom.PRNGKey
+        ]:
             sample_key = jrandom.split(self._sample_key, num=1)[0]
             keys = jrandom.split(self._sample_key, num=self._batch_size)
-            grads, learn_info = temperature_loss(temperature,
-                                                 policy,
-                                                 obss,
-                                                 h_states,
-                                                 keys)
+            grads, learn_info = temperature_loss(
+                temperature, policy, obss, h_states, keys
+            )
 
             updates, opt_state = opt.update(grads, opt_state)
             temperature = eqx.apply_updates(temperature, updates)
             return temperature, opt_state, grads, learn_info, sample_key
-        
+
         self.update_q = eqx.filter_jit(update_q)
         self.update_policy = eqx.filter_jit(update_policy)
         self.update_temperature = eqx.filter_jit(update_temperature)
-        
+
     def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
         self._step += 1
 
@@ -258,6 +282,7 @@ class SAC(LearnerWithTargetNetwork):
         learn_info[MAX_NEXT_Q] = -np.inf
         learn_info[MIN_CURR_Q] = np.inf
         learn_info[MIN_NEXT_Q] = np.inf
+        learn_info[MEAN_TEMPERATURE] = 0.0
         for update_i in range(self._num_gradient_steps):
             (
                 obss,
@@ -302,9 +327,15 @@ class SAC(LearnerWithTargetNetwork):
 
             self._model[Q] = q
             self._opt_state[Q] = opt_state
-            
+
             if self._step % self._actor_update_frequency == 0:
-                policy, opt_state, grads, policy_learn_info, self._sample_key = self.update_policy(
+                (
+                    policy,
+                    opt_state,
+                    grads,
+                    policy_learn_info,
+                    self._sample_key,
+                ) = self.update_policy(
                     policy=self.model[POLICY],
                     q=self.model[Q],
                     temperature=self.model[TEMPERATURE],
@@ -312,13 +343,19 @@ class SAC(LearnerWithTargetNetwork):
                     opt_state=self.opt_state[POLICY],
                     obss=obss,
                     h_states=h_states,
-                    acts=acts
+                    acts=acts,
                 )
                 self._model[POLICY] = policy
                 self._opt_state[POLICY] = opt_state
 
                 if self._target_entropy is not None:
-                    temperature, opt_state, grads, temperature_learn_info, self._sample_key = self.update_temperature(
+                    (
+                        temperature,
+                        opt_state,
+                        grads,
+                        temperature_learn_info,
+                        self._sample_key,
+                    ) = self.update_temperature(
                         policy=self.model[POLICY],
                         temperature=self.model[TEMPERATURE],
                         opt=self.opt[TEMPERATURE],
@@ -339,7 +376,11 @@ class SAC(LearnerWithTargetNetwork):
                 policy_learn_info[POLICY_LOSS].item() / self._num_gradient_steps
             )
             learn_info[MEAN_TEMPERATURE_LOSS] += (
-                temperature_learn_info[TEMPERATURE_LOSS].item() / self._num_gradient_steps
+                temperature_learn_info[TEMPERATURE_LOSS].item()
+                / self._num_gradient_steps
+            )
+            learn_info[MEAN_TEMPERATURE] += (
+                temperature_learn_info[TEMPERATURE].item() / self._num_gradient_steps
             )
             learn_info[MEAN_CURR_Q] += (
                 q_learn_info[MEAN_CURR_Q].item() / self._num_gradient_steps
