@@ -1,4 +1,4 @@
-from abc import abstractmethod, abstractstaticmethod
+from abc import abstractstaticmethod
 
 import equinox as eqx
 import jax

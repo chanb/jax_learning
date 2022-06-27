@@ -20,7 +20,10 @@ class ReinforcementLearner:
                  cfg: Namespace):
         self._model = model
         self._opt = opt
-        self._opt_state = {model_key: model_opt.init(model[model_key]) for model_key, model_opt in self._opt.items()}
+        self._opt_state = {
+            model_key: model_opt.init(model[model_key]) \
+                for model_key, model_opt in self._opt.items()
+        }
         self._buffer = buffer
         self._cfg = cfg
 

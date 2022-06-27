@@ -38,7 +38,8 @@ class QLearning(LearnerWithTargetNetwork):
         self._batch_size = cfg.batch_size
         self._buffer_warmup = cfg.buffer_warmup
         self._num_gradient_steps = cfg.num_gradient_steps
-        self._q_learning_td_error = jax.vmap(q_learning_td_error, in_axes=[0, 0, 0, 0, 0, None])
+        _q_learning_td_error = jax.vmap(q_learning_td_error,
+                                        in_axes=[0, 0, 0, 0, 0, None])
 
         @eqx.filter_grad(has_aux=True)
         def q_learning_loss(models: Tuple[eqx.Module, eqx.Module],
@@ -53,7 +54,12 @@ class QLearning(LearnerWithTargetNetwork):
             curr_q_preds, _ = jax.vmap(q.q_values)(obss, h_states)
             next_q_preds, _ = jax.vmap(target_q.q_values)(next_obss, next_h_states)
             
-            td_errors = self._q_learning_td_error(curr_q_preds, acts, next_q_preds, rews, dones, self._gamma)
+            td_errors = _q_learning_td_error(curr_q_preds,
+                                             acts,
+                                             next_q_preds,
+                                             rews,
+                                             dones,
+                                             self._gamma)
             loss = jnp.mean(td_errors ** 2)
             return loss, {
                 LOSS: loss,
@@ -79,7 +85,12 @@ class QLearning(LearnerWithTargetNetwork):
                  rews: np.ndarray,
                  dones: np.ndarray,
                  next_obss: np.ndarray,
-                 next_h_states: np.ndarray) -> Tuple[eqx.Module, optax.OptState, Tuple[jax.tree_util.PyTreeDef, jax.tree_util.PyTreeDef, jax.tree_util.PyTreeDef], dict]:
+                 next_h_states: np.ndarray) -> Tuple[eqx.Module,
+                                                     optax.OptState,
+                                                     Tuple[jax.tree_util.PyTreeDef,
+                                                           jax.tree_util.PyTreeDef,
+                                                           jax.tree_util.PyTreeDef],
+                                                     dict]:
             grads, learn_info = q_learning_loss((q, target_q),
                                                 obss,
                                                 h_states,
@@ -105,7 +116,8 @@ class QLearning(LearnerWithTargetNetwork):
               learn_info: dict):
         self._step += 1
         
-        if self._step <= self._buffer_warmup or (self._step - 1 - self._buffer_warmup) % self._update_frequency != 0:
+        if self._step <= self._buffer_warmup or \
+            (self._step - 1 - self._buffer_warmup) % self._update_frequency != 0:
             return
 
         learn_info[MEAN_LOSS] = 0.
@@ -116,21 +128,23 @@ class QLearning(LearnerWithTargetNetwork):
         learn_info[MIN_CURR_Q] = np.inf
         learn_info[MIN_NEXT_Q] = np.inf
         for update_i in range(self._num_gradient_steps):
-            obss, h_states, acts, rews, dones, next_obss, next_h_states, _, _, _ = self.buffer.sample_with_next_obs(batch_size=self._batch_size,
-                                                                                                                    next_obs=next_obs,
-                                                                                                                    next_h_state=next_h_state)
+            obss, h_states, acts, rews, dones, next_obss, next_h_states, _, _, _ \
+                = self.buffer.sample_with_next_obs(batch_size=self._batch_size,
+                                                   next_obs=next_obs,
+                                                   next_h_state=next_h_state)
 
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
             acts = acts.astype(np.int64)
             
-            (obss, h_states, acts, rews, dones, next_obss, next_h_states) = to_jnp(*batch_flatten(obss,
-                                                                                                  h_states,
-                                                                                                  acts,
-                                                                                                  rews,
-                                                                                                  dones,
-                                                                                                  next_obss,
-                                                                                                  next_h_states))
+            (obss, h_states, acts, rews, dones, next_obss, next_h_states) \
+                = to_jnp(*batch_flatten(obss,
+                                        h_states,
+                                        acts,
+                                        rews,
+                                        dones,
+                                        next_obss,
+                                        next_h_states))
             q, opt_state, grads, curr_learn_info = self.step(q=self.model[Q],
                                                              target_q=self.target_model[Q],
                                                              opt=self.opt[Q],

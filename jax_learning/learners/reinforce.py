@@ -53,7 +53,10 @@ class REINFORCE(ReinforcementLearner):
                  obss: np.ndarray,
                  h_states: np.ndarray,
                  acts: np.ndarray,
-                 rets: np.ndarray) -> Tuple[eqx.Module, optax.OptState, jax.tree_util.PyTreeDef, dict]:
+                 rets: np.ndarray) -> Tuple[eqx.Module,
+                                            optax.OptState,
+                                            jax.tree_util.PyTreeDef,
+                                            dict]:
             grads, learn_info = reinforce_loss(policy,
                                                obss,
                                                h_states,
@@ -74,8 +77,9 @@ class REINFORCE(ReinforcementLearner):
         if self._step % self._update_frequency != 0:
             return
 
-        obss, h_states, acts, rews, dones, _, _, _ = self.buffer.sample(batch_size=self._update_frequency,
-                                                                        idxes=self._sample_idxes)
+        obss, h_states, acts, rews, dones, _, _, _ \
+            = self.buffer.sample(batch_size=self._update_frequency,
+                                 idxes=self._sample_idxes)
         if self.obs_rms:
             obss = self.obs_rms.normalize(obss)
 

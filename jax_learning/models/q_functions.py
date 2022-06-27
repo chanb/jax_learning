@@ -46,7 +46,9 @@ class SoftmaxQ(StochasticPolicy, ActionValue):
 
     def deterministic_action(self,
                              obs: np.ndarray,
-                             h_state: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                             h_state: np.ndarray) -> Tuple[np.ndarray,
+                                                           np.ndarray,
+                                                           np.ndarray]:
         q_val, h_state = self.q_values(obs, h_state)
         act = jnp.argmax(q_val, axis=-1)
         return act, h_state

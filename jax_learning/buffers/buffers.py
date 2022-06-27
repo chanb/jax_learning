@@ -49,7 +49,14 @@ class ReplayBuffer(ABC):
     def sample(self,
                batch_size: int,
                idxes: Optional[np.ndarray]=None,
-               **kwargs) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict, np.ndarray, np.ndarray]:
+               **kwargs) -> Tuple[np.ndarray,
+                                  np.ndarray,
+                                  np.ndarray,
+                                  np.ndarray,
+                                  np.ndarray,
+                                  dict,
+                                  np.ndarray,
+                                  np.ndarray]:
         raise NotImplementedError
 
     @abstractmethod

@@ -1,7 +1,6 @@
-from abc import ABC, abstractmethod
-from jax.core import NamedShape
+from abc import abstractmethod
 from jax.scipy.stats.norm import logpdf as normal_lprob
-from typing import Sequence, Union, Optional
+from typing import Optional
 
 import equinox as eqx
 import jax
@@ -41,7 +40,9 @@ class Categorical(Distribution):
 
     @eqx.filter_jit
     def lprob(self, x: np.ndarray) -> np.ndarray:
-        return self.logits[x] - jax.scipy.special.logsumexp(self.logits, axis=-1, keepdims=True)
+        return self.logits[x] - jax.scipy.special.logsumexp(self.logits,
+                                                            axis=-1,
+                                                            keepdims=True)
 
 
 class Normal(Distribution):

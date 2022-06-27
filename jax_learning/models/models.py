@@ -1,5 +1,5 @@
-from abc import abstractmethod, abstractstaticmethod
-from typing import Tuple, Optional, Sequence, Callable, Any
+from abc import abstractmethod
+from typing import Tuple, Sequence, Callable, Any
 
 import equinox as eqx
 import jax
