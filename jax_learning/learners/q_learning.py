@@ -25,6 +25,7 @@ MIN_NEXT_Q = "min_next_q"
 MAX_TD_ERROR = "max_td_error"
 MIN_TD_ERROR = "min_td_error"
 Q = "q"
+OMEGA = "omega"
 
 
 class QLearning(LearnerWithTargetNetwork):
@@ -76,7 +77,7 @@ class QLearning(LearnerWithTargetNetwork):
                 MIN_TD_ERROR: jnp.min(td_errors),
             }
 
-        apply_residual_gradient = polyak_average_generator(getattr(cfg, "omega", 1.0))
+        apply_residual_gradient = polyak_average_generator(getattr(cfg, OMEGA, 1.0))
 
         def update_q(
             q: ActionValue,
