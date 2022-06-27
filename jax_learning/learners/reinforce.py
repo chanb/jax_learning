@@ -13,6 +13,7 @@ from jax_learning.distributions.utils import get_lprob
 from jax_learning.learners import ReinforcementLearner
 from jax_learning.losses.policy_loss import reinforce_score_function
 from jax_learning.losses.value_loss import monte_carlo_returns
+from jax_learning.models import StochasticPolicy
 
 POLICY = "policy"
 LOSS = "loss"
@@ -35,7 +36,7 @@ class REINFORCE(ReinforcementLearner):
 
         @eqx.filter_grad(has_aux=True)
         def reinforce_loss(
-            policy: eqx.Module,
+            policy: StochasticPolicy,
             obss: np.ndarray,
             h_states: np.ndarray,
             acts: np.ndarray,
@@ -52,14 +53,14 @@ class REINFORCE(ReinforcementLearner):
             }
 
         def step(
-            policy: eqx.Module,
+            policy: StochasticPolicy,
             opt: optax.GradientTransformation,
             opt_state: optax.OptState,
             obss: np.ndarray,
             h_states: np.ndarray,
             acts: np.ndarray,
             rets: np.ndarray,
-        ) -> Tuple[eqx.Module, optax.OptState, jax.tree_util.PyTreeDef, dict]:
+        ) -> Tuple[StochasticPolicy, optax.OptState, jax.tree_util.PyTreeDef, dict]:
             grads, learn_info = reinforce_loss(policy, obss, h_states, acts, rets)
 
             updates, opt_state = opt.update(grads, opt_state)

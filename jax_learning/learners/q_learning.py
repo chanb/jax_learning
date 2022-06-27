@@ -12,6 +12,7 @@ from jax_learning.buffers.utils import to_jnp, batch_flatten
 from jax_learning.common import polyak_average_generator
 from jax_learning.learners import LearnerWithTargetNetwork
 from jax_learning.losses.value_loss import q_learning_td_error
+from jax_learning.models import ActionValue
 
 LOSS = "loss"
 MEAN_LOSS = "mean_loss"
@@ -46,7 +47,7 @@ class QLearning(LearnerWithTargetNetwork):
 
         @eqx.filter_grad(has_aux=True)
         def q_learning_loss(
-            models: Tuple[eqx.Module, eqx.Module],
+            models: Tuple[ActionValue, ActionValue],
             obss: np.ndarray,
             h_states: np.ndarray,
             acts: np.ndarray,
@@ -78,8 +79,8 @@ class QLearning(LearnerWithTargetNetwork):
         apply_residual_gradient = polyak_average_generator(cfg.omega)
 
         def step(
-            q: eqx.Module,
-            target_q: eqx.Module,
+            q: ActionValue,
+            target_q: ActionValue,
             opt: optax.GradientTransformation,
             opt_state: optax.OptState,
             obss: np.ndarray,
@@ -90,7 +91,7 @@ class QLearning(LearnerWithTargetNetwork):
             next_obss: np.ndarray,
             next_h_states: np.ndarray,
         ) -> Tuple[
-            eqx.Module,
+            ActionValue,
             optax.OptState,
             Tuple[
                 jax.tree_util.PyTreeDef,
