@@ -91,7 +91,7 @@ class REINFORCE(Learner):
                                                              h_states,
                                                              acts,
                                                              rets))
-        policy, opt_state, grads, curr_learn_info = self.step(model=self.model[POLICY],
+        policy, opt_state, grads, curr_learn_info = self.step(policy=self.model[POLICY],
                                                               opt=self.opt[POLICY],
                                                               opt_state=self.opt_state[POLICY],
                                                               obss=obss,

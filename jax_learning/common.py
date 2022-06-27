@@ -1,6 +1,14 @@
-from typing import Sequence
+from typing import Sequence, Callable
 
 import numpy as np
+
+
+def polyak_average_generator(x: float) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+    def polyak_average(p: np.ndarray,
+                       q: np.ndarray) -> np.ndarray:
+        return x * p + (1 - x) * q
+    return polyak_average
+
 
 class RunningMeanStd:
     """ Modified from Baseline

@@ -8,7 +8,7 @@ import numpy as np
 import optax
 
 from jax_learning.buffers import ReplayBuffer
-from jax_learning.common import RunningMeanStd
+from jax_learning.common import RunningMeanStd, polyak_average_generator
 from jax_learning.constants import NORMALIZE_OBS, NORMALIZE_VALUE
 
 
@@ -76,12 +76,14 @@ class LearnerWithTargetNetwork(Learner):
                  cfg: Namespace):
         super().__init__(model, opt, buffer, cfg)
         self._target_model = target_model
+        self._tau = cfg.tau
+        self.polyak_average = polyak_average_generator(self._tau)
     
     @property
     def target_model(self):
         return self._target_model
 
-    def polyak_average(self, model_key):
-        self._target_model[model_key] = jax.tree_map(lambda p, tp: p * self._tau + tp * (1 - self._tau),
+    def update_target_model(self, model_key):
+        self._target_model[model_key] = jax.tree_map(self.polyak_average,
                                                      self.model[model_key],
                                                      self.target_model[model_key])

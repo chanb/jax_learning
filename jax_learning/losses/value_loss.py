@@ -15,6 +15,6 @@ def q_learning_td_error(curr_q_pred: np.ndarray,
                         next_q_pred: np.ndarray,
                         rew: np.ndarray,
                         done: np.ndarray,
-                        gamma: np.ndarray) -> np.ndarray:
+                        gamma: float) -> np.ndarray:
     q_target = rew + (1 - done) * (gamma * jnp.max(next_q_pred))
     return curr_q_pred[act] - q_target

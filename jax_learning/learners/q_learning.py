@@ -39,10 +39,10 @@ class QLearning(LearnerWithTargetNetwork):
         self._buffer_warmup = cfg.buffer_warmup
         self._num_gradient_steps = cfg.num_gradient_steps
         self._gamma = cfg.gamma
-        self._tau = cfg.tau
         self._update_frequency = cfg.update_frequency
         self._target_update_frequency = cfg.target_update_frequency
         self._omega = cfg.omega
+        self._q_learning_td_error = jax.vmap(q_learning_td_error, in_axes=[0, 0, 0, 0, 0, None])
 
         @eqx.filter_grad(has_aux=True)
         def q_learning_loss(models: Tuple[eqx.Module, eqx.Module],
@@ -58,7 +58,7 @@ class QLearning(LearnerWithTargetNetwork):
             curr_q_preds, _ = jax.vmap(q.q_values)(obss, h_states)
             next_q_preds, _ = jax.vmap(target_q.q_values)(next_obss, next_h_states)
             
-            td_errors = jax.vmap(q_learning_td_error)(curr_q_preds, acts, next_q_preds, rews, dones, gammas)
+            td_errors = self._q_learning_td_error(curr_q_preds, acts, next_q_preds, rews, dones, gammas)
             loss = jnp.mean(td_errors ** 2)
             return loss, {
                 LOSS: loss,
@@ -157,7 +157,7 @@ class QLearning(LearnerWithTargetNetwork):
             self._opt_state[Q] = opt_state
             
             if self._step % self._target_update_frequency == 0:
-                self.polyak_average(model_key=Q)
+                self.update_target_model(model_key=Q)
             
             learn_info[MEAN_LOSS] += curr_learn_info[LOSS].item() / self._num_gradient_steps
             learn_info[MEAN_CURR_Q] += curr_learn_info[MEAN_CURR_Q].item() / self._num_gradient_steps
