@@ -1,5 +1,5 @@
 # JAX Learning
-This repository provides learning algorithms using JAX.
+This repository provides learning algorithms using [JAX](https://github.com/google/jax), built on top of [Equinox](https://github.com/patrick-kidger/equinox) and [Optax](https://github.com/deepmind/optax).
 
 # Installation
 ## Prerequisites
@@ -23,7 +23,11 @@ Running `wandb` local instance:
 - Docker: https://www.docker.com/
 - Weights & Biases Local: https://github.com/wandb/local
 
-## Citation
+# Code Formatting
+We use [Black](https://github.com/psf/black) code formatter as our standard.
+Run `black jax_learning` to format the full codebase.
+
+# Citation
 Please consider citing this repository if you use/extend this codebase in your work:
 ```
 @misc{jax_learning,
