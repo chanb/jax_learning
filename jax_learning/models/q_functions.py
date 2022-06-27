@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple, Optional
+from typing import Sequence, Tuple, Optional, Callable
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -7,6 +7,34 @@ import numpy as np
 
 from jax_learning.distributions import Categorical
 from jax_learning.models import StochasticPolicy, ActionValue, MLP
+
+
+class MultiQ(ActionValue):
+    qs: ActionValue
+
+    def __init__(self,
+                 q_constructor: Callable[[jrandom.PRNGKey], ActionValue],
+                 num_qs: int,
+                 key: jrandom.PRNGKey):
+        @eqx.filter_vmap(out=lambda x: 0 if eqx.is_array(x) else None)
+        def make_qs(key):
+            return q_constructor(key=key)
+        self.qs = make_qs(jrandom.split(key, num_qs))
+
+    @staticmethod
+    @eqx.filter_vmap(kwargs=dict(obs=None, h_state=None, act=None))
+    def _q_values(q: ActionValue,
+                  obs: np.ndarray,
+                  h_state: np.ndarray,
+                  act: np.ndarray):
+        return q.q_values(obs, h_state, act)
+    
+    def q_values(self,
+                 obs: np.ndarray,
+                 h_state: np.ndarray,
+                 act: Optional[np.ndarray]=None) -> Tuple[np.ndarray, np.ndarray]:
+        q_vals, h_states = self._q_values(self.qs, obs, h_state, act)
+        return q_vals, h_states
 
 
 class SoftmaxQ(StochasticPolicy, ActionValue):

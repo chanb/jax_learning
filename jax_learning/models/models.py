@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import abstractmethod, abstractstaticmethod
 from typing import Tuple, Optional, Sequence, Callable, Any
 
 import equinox as eqx
