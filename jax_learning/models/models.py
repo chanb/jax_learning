@@ -43,9 +43,8 @@ class StochasticPolicy(Policy):
 class ActionValue(Model):
     @abstractmethod
     def q_values(self,
-                 obs: np.ndarray,
-                 h_state: np.ndarray,
-                 act: Optional[np.ndarray]=None) -> Tuple[np.ndarray, np.ndarray]:
+                 x: np.ndarray,
+                 h_state: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         pass
 
 

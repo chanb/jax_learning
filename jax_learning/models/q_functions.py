@@ -26,7 +26,7 @@ class MultiQ(ActionValue):
     def _q_values(q: ActionValue,
                   obs: np.ndarray,
                   h_state: np.ndarray,
-                  act: np.ndarray):
+                  act: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         return q.q_values(obs, h_state, act)
     
     def q_values(self,
@@ -38,16 +38,10 @@ class MultiQ(ActionValue):
 
 
 class SoftmaxQ(StochasticPolicy, ActionValue):
-    obs_dim: int
-    act_dim: int
     q_function: ActionValue
 
     def __init__(self,
-                 obs_dim: Sequence[int],
-                 act_dim: Sequence[int],
                  q_function: ActionValue):
-        self.obs_dim = int(np.product(obs_dim))
-        self.act_dim = int(np.product(act_dim))
         self.q_function = q_function
 
     def deterministic_action(self,
@@ -83,23 +77,26 @@ class SoftmaxQ(StochasticPolicy, ActionValue):
 
 
 class MLPQ(ActionValue):
-    obs_dim: int
-    act_dim: int
+    in_dim: int
+    out_dim: int
     q_function: eqx.Module
 
     def __init__(self,
-                 obs_dim: Sequence[int],
-                 act_dim: Sequence[int],
+                 in_dim: Sequence[int],
+                 out_dim: Sequence[int],
                  hidden_dim: int,
                  num_hidden: int,
                  key: jrandom.PRNGKey):
-        self.obs_dim = int(np.product(obs_dim))
-        self.act_dim = int(np.product(act_dim))
-        self.q_function = MLP(self.obs_dim, self.act_dim, hidden_dim, num_hidden, key)
+        self.in_dim = int(np.product(in_dim))
+        self.out_dim = int(np.product(out_dim))
+        self.q_function = MLP(self.in_dim, self.out_dim, hidden_dim, num_hidden, key)
 
     def q_values(self,
                  obs: np.ndarray,
                  h_state: np.ndarray,
                  act: Optional[np.ndarray]=None) -> Tuple[np.ndarray, np.ndarray]:
-        q_val = self.q_function(obs)
+        x = obs
+        if act is not None:
+            x = jnp.concatenate((obs, act), axis=-1)
+        q_val = self.q_function(x)
         return q_val, h_state
