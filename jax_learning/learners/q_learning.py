@@ -76,7 +76,7 @@ class QLearning(LearnerWithTargetNetwork):
                 MIN_TD_ERROR: jnp.min(td_errors),
             }
 
-        apply_residual_gradient = polyak_average_generator(cfg.omega)
+        apply_residual_gradient = polyak_average_generator(getattr(cfg, "omega", 1.0))
 
         def step(
             q: ActionValue,
