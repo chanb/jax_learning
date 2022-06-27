@@ -16,10 +16,10 @@ def interact(env, agent, cfg):
     if clip_action:
         max_action = cfg.max_action
         min_action = cfg.min_action
-    
+
     obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
     h_state = agent.reset()
-    ep_return = 0.
+    ep_return = 0.0
     ep_i = 0
     ep_len = 0
     tic = timeit.default_timer()
@@ -38,24 +38,24 @@ def interact(env, agent, cfg):
         obs = next_obs
         ep_return += rew
         ep_len += 1
-        
+
         if done:
             obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
             h_state = agent.reset()
             timestep_dict[c.EPISODIC_RETURN] = ep_return
             timestep_dict[c.EPISODE] = ep_i
             timestep_dict[c.EPISODE_LENGTH] = ep_len
-            ep_return = 0.
+            ep_return = 0.0
             ep_len = 0
             ep_i += 1
-            
+
         if (timestep_i + 1) % log_interval == 0:
             toc = timeit.default_timer()
             timestep_dict[c.TIMEDIFF] = toc - tic
             tic = timeit.default_timer()
-            
+
         wandb.log(timestep_dict)
-        
+
 
 def evaluate(env, agent, cfg):
     max_episodes = cfg.max_episodes
@@ -69,13 +69,11 @@ def evaluate(env, agent, cfg):
     for ep_i in range(max_episodes):
         obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
         h_state = agent.reset()
-        ep_return = 0.
+        ep_return = 0.0
         ep_len = 0
         done = False
         while not done:
-            timestep_dict = {
-                f"eval_{c.TIMESTEP}": ep_len
-            }
+            timestep_dict = {f"eval_{c.TIMESTEP}": ep_len}
             act, h_state = agent.deterministic_action(obs, h_state, timestep_dict)
             env_act = act
             if clip_action:

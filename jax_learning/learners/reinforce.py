@@ -22,21 +22,25 @@ MIN_RETURN = "min_return"
 
 
 class REINFORCE(ReinforcementLearner):
-    def __init__(self,
-                 model: Dict[str, eqx.Module],
-                 opt: Dict[str, optax.GradientTransformation],
-                 buffer: ReplayBuffer,
-                 cfg: Namespace):
+    def __init__(
+        self,
+        model: Dict[str, eqx.Module],
+        opt: Dict[str, optax.GradientTransformation],
+        buffer: ReplayBuffer,
+        cfg: Namespace,
+    ):
         super().__init__(model, opt, buffer, cfg)
-        
+
         self._sample_idxes = np.arange(self._update_frequency)
-        
+
         @eqx.filter_grad(has_aux=True)
-        def reinforce_loss(policy: eqx.Module,
-                           obss: np.ndarray,
-                           h_states: np.ndarray,
-                           acts: np.ndarray,
-                           rets: np.ndarray) -> Tuple[np.ndarray, dict]:
+        def reinforce_loss(
+            policy: eqx.Module,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            acts: np.ndarray,
+            rets: np.ndarray,
+        ) -> Tuple[np.ndarray, dict]:
             dists = jax.vmap(policy.dist)(obss, h_states)
             lprobs = jax.vmap(get_lprob)(dists, acts)
             scores = jax.vmap(reinforce_score_function)(lprobs, rets)
@@ -46,40 +50,33 @@ class REINFORCE(ReinforcementLearner):
                 MAX_RETURN: jnp.max(rets),
                 MIN_RETURN: jnp.min(rets),
             }
-        
-        def step(policy: eqx.Module,
-                 opt: optax.GradientTransformation,
-                 opt_state: optax.OptState,
-                 obss: np.ndarray,
-                 h_states: np.ndarray,
-                 acts: np.ndarray,
-                 rets: np.ndarray) -> Tuple[eqx.Module,
-                                            optax.OptState,
-                                            jax.tree_util.PyTreeDef,
-                                            dict]:
-            grads, learn_info = reinforce_loss(policy,
-                                               obss,
-                                               h_states,
-                                               acts,
-                                               rets)
+
+        def step(
+            policy: eqx.Module,
+            opt: optax.GradientTransformation,
+            opt_state: optax.OptState,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            acts: np.ndarray,
+            rets: np.ndarray,
+        ) -> Tuple[eqx.Module, optax.OptState, jax.tree_util.PyTreeDef, dict]:
+            grads, learn_info = reinforce_loss(policy, obss, h_states, acts, rets)
 
             updates, opt_state = opt.update(grads, opt_state)
             policy = eqx.apply_updates(policy, updates)
             return policy, opt_state, grads, learn_info
+
         self.step = eqx.filter_jit(step)
 
-    def learn(self,
-              next_obs: np.ndarray,
-              next_h_state: np.ndarray,
-              learn_info: dict):
+    def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
         self._step += 1
-        
+
         if self._step % self._update_frequency != 0:
             return
 
-        obss, h_states, acts, rews, dones, _, _, _ \
-            = self.buffer.sample(batch_size=self._update_frequency,
-                                 idxes=self._sample_idxes)
+        obss, h_states, acts, rews, dones, _, _, _ = self.buffer.sample(
+            batch_size=self._update_frequency, idxes=self._sample_idxes
+        )
         if self.obs_rms:
             obss = self.obs_rms.normalize(obss)
 
@@ -88,17 +85,18 @@ class REINFORCE(ReinforcementLearner):
             self.val_rms.update(rets)
             rets = self.val_rms.normalize(rets)
 
-        (obss, h_states, acts, rets) = to_jnp(*batch_flatten(obss,
-                                                             h_states,
-                                                             acts,
-                                                             rets))
-        policy, opt_state, grads, curr_learn_info = self.step(policy=self.model[POLICY],
-                                                              opt=self.opt[POLICY],
-                                                              opt_state=self.opt_state[POLICY],
-                                                              obss=obss,
-                                                              h_states=h_states,
-                                                              acts=acts,
-                                                              rets=rets)
+        (obss, h_states, acts, rets) = to_jnp(
+            *batch_flatten(obss, h_states, acts, rets)
+        )
+        policy, opt_state, grads, curr_learn_info = self.step(
+            policy=self.model[POLICY],
+            opt=self.opt[POLICY],
+            opt_state=self.opt_state[POLICY],
+            obss=obss,
+            h_states=h_states,
+            acts=acts,
+            rets=rets,
+        )
 
         self._model[POLICY] = policy
         self._opt_state[POLICY] = opt_state
