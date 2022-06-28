@@ -12,11 +12,12 @@ import jax_learning.wandb_constants as w
 from jax_learning.agents import Agent
 
 
-def random_exploration_generator(exploration_strategy: str,
-                                 action_dim: Sequence[int],
-                                 min_action: Union[float, np.ndarray]=-1.,
-                                 max_action: Union[float, np.ndarray]=1.) -> Callable[[], np.ndarray]:
-
+def random_exploration_generator(
+    exploration_strategy: str,
+    action_dim: Sequence[int],
+    min_action: Union[float, np.ndarray] = -1.0,
+    max_action: Union[float, np.ndarray] = 1.0,
+) -> Callable[[], np.ndarray]:
     def sample_standard_gaussian():
         return np.clip(np.random.randn(*action_dim), a_min=min_action, a_max=max_action)
 
