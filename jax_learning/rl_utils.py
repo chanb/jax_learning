@@ -54,7 +54,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     metrics_batch = []
     tic = timeit.default_timer()
     for timestep_i in range(max_timesteps):
-        timestep_dict = {w.TRAIN: {w.TIMESTEP: timestep_i}}
+        timestep_dict = {f"{w.TRAIN}/{w.TIMESTEP}": timestep_i}
         act, next_h_state = agent.compute_action(obs, h_state, timestep_dict)
 
         if timestep_i < num_exploration:
@@ -74,9 +74,9 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         if done:
             obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
             h_state = agent.reset()
-            timestep_dict[w.TRAIN][w.EPISODIC_RETURN] = ep_return
-            timestep_dict[w.TRAIN][w.EPISODE] = ep_i
-            timestep_dict[w.TRAIN][w.EPISODE_LENGTH] = ep_len
+            timestep_dict[f"{w.TRAIN}/{w.EPISODIC_RETURN}"] = ep_return
+            timestep_dict[f"{w.TRAIN}/{w.EPISODE}"] = ep_i
+            timestep_dict[f"{w.TRAIN}/{w.EPISODE_LENGTH}"] = ep_len
             ep_return = 0.0
             ep_len = 0
             ep_i += 1
@@ -112,7 +112,7 @@ def evaluate(env: Any, agent: Agent, cfg: Namespace):
         ep_len = 0
         done = False
         while not done:
-            timestep_dict = {w.EVALUATION: {w.TIMESTEP: timestep_i}}
+            timestep_dict = {f"{w.EVALUATION}/{w.TIMESTEP}": timestep_i}
             act, h_state = agent.deterministic_action(obs, h_state, timestep_dict)
             env_act = act
             if clip_action:
@@ -124,9 +124,9 @@ def evaluate(env: Any, agent: Agent, cfg: Namespace):
             timestep_i += 1
 
             if done:
-                timestep_dict[w.EVALUATION][w.EPISODIC_RETURN] = ep_return
-                timestep_dict[w.EVALUATION][w.EPISODE] = ep_i
-                timestep_dict[w.EVALUATION][w.EPISODE_LENGTH] = ep_len
+                timestep_dict[f"{w.EVALUATION}/{w.EPISODIC_RETURN}"] = ep_return
+                timestep_dict[f"{w.EVALUATION}/{w.EPISODE}"] = ep_i
+                timestep_dict[f"{w.EVALUATION}/{w.EPISODE_LENGTH}"] = ep_len
 
             metrics_batch.append(timestep_dict)
     for metrics in metrics_batch:
