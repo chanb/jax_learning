@@ -399,7 +399,7 @@ class SAC(LearnerWithTargetNetwork):
                 policy_learn_info[POLICY_LOSS].item() / self._num_gradient_steps
             )
             learn_info[w.LOSSES][MEAN_TEMPERATURE_LOSS] += (
-                temperature_learn_info[Q_LOSS].item() / self._num_gradient_steps
+                temperature_learn_info[TEMPERATURE_LOSS].item() / self._num_gradient_steps
             )
             learn_info[w.LOSSES][MEAN_Q_LOSS] += (
                 q_learn_info[Q_LOSS].item() / self._num_gradient_steps
