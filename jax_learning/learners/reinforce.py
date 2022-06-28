@@ -103,7 +103,5 @@ class REINFORCE(ReinforcementLearner):
         self._model[POLICY] = policy
         self._opt_state[POLICY] = opt_state
 
-        learn_info[w.LOSSES] = {
-            MEAN_LOSS: curr_learn_info[LOSS].item(),
-        }
+        learn_info[f"{w.LOSSES}/{MEAN_LOSS}"] = curr_learn_info[LOSS].item()
         self.buffer.clear()
