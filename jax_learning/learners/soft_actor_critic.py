@@ -17,6 +17,8 @@ from jax_learning.losses.temperature_loss import sac_temperature_loss
 from jax_learning.losses.value_loss import clipped_min_q_td_error
 from jax_learning.models import StochasticPolicy, ActionValue, Temperature
 
+import jax_learning.wandb_constants as w
+
 Q_LOSS = "q_loss"
 POLICY_LOSS = "policy_loss"
 TEMPERATURE_LOSS = "temperature_loss"
@@ -117,6 +119,9 @@ class SAC(LearnerWithTargetNetwork):
                 MEAN_CURR_Q: jnp.mean(curr_q_preds),
                 MAX_TD_ERROR: jnp.max(td_errors),
                 MIN_TD_ERROR: jnp.min(td_errors),
+                "max_q_log_prob": jnp.max(next_lprobs),
+                "min_q_log_prob": jnp.min(next_lprobs),
+                "mean_q_log_prob": jnp.mean(next_lprobs),
             }
 
         apply_residual_gradient = polyak_average_generator(getattr(cfg, OMEGA, 1.0))
@@ -196,6 +201,9 @@ class SAC(LearnerWithTargetNetwork):
             loss = jnp.mean(_sac_policy_loss(curr_q_preds_min, lprobs, temp))
             return loss, {
                 POLICY_LOSS: loss,
+                "max_policy_log_prob": jnp.max(lprobs),
+                "min_policy_log_prob": jnp.min(lprobs),
+                "mean_policy_log_prob": jnp.mean(lprobs),
             }
 
         def update_policy(
@@ -238,6 +246,9 @@ class SAC(LearnerWithTargetNetwork):
             return loss, {
                 TEMPERATURE_LOSS: loss,
                 TEMPERATURE: temp,
+                "max_temperature_log_prob": jnp.max(lprobs),
+                "min_temperature_log_prob": jnp.min(lprobs),
+                "mean_temperature_log_prob": jnp.mean(lprobs),
             }
 
         def update_temperature(
@@ -273,16 +284,31 @@ class SAC(LearnerWithTargetNetwork):
         ):
             return
 
-        learn_info[MEAN_Q_LOSS] = 0.0
-        learn_info[MEAN_POLICY_LOSS] = 0.0
-        learn_info[MEAN_TEMPERATURE_LOSS] = 0.0
-        learn_info[MEAN_CURR_Q] = 0.0
-        learn_info[MEAN_NEXT_Q] = 0.0
-        learn_info[MAX_CURR_Q] = -np.inf
-        learn_info[MAX_NEXT_Q] = -np.inf
-        learn_info[MIN_CURR_Q] = np.inf
-        learn_info[MIN_NEXT_Q] = np.inf
-        learn_info[MEAN_TEMPERATURE] = 0.0
+        learn_info[w.LOSSES] = {
+            MEAN_Q_LOSS: 0.0,
+            MEAN_TEMPERATURE_LOSS: 0.0,
+            MEAN_POLICY_LOSS: 0.0,
+        }
+        learn_info[w.TRAIN] = {MEAN_TEMPERATURE: 0.0}
+        learn_info[w.Q_VALUES] = {
+            MEAN_CURR_Q: 0.0,
+            MEAN_NEXT_Q: 0.0,
+            MAX_CURR_Q: -np.inf,
+            MAX_NEXT_Q: -np.inf,
+            MIN_CURR_Q: np.inf,
+            MIN_NEXT_Q: np.inf,
+        }
+        learn_info[w.ACTION_LOG_PROBS] = {
+            "max_q_log_prob": 0.0,
+            "min_q_log_prob": 0.0,
+            "mean_q_log_prob": 0.0,
+            "max_policy_log_prob": 0.0,
+            "min_policy_log_prob": 0.0,
+            "mean_policy_log_prob": 0.0,
+            "max_temperature_log_prob": 0.0,
+            "min_temperature_log_prob": 0.0,
+            "mean_temperature_log_prob": 0.0,
+        }
         for update_i in range(self._num_gradient_steps):
             (
                 obss,
@@ -369,34 +395,58 @@ class SAC(LearnerWithTargetNetwork):
             if self._step % self._target_update_frequency == 0:
                 self.update_target_model(model_key=Q)
 
-            learn_info[MEAN_Q_LOSS] += (
-                q_learn_info[Q_LOSS].item() / self._num_gradient_steps
-            )
-            learn_info[MEAN_POLICY_LOSS] += (
+            learn_info[w.LOSSES][MEAN_POLICY_LOSS] += (
                 policy_learn_info[POLICY_LOSS].item() / self._num_gradient_steps
             )
-            learn_info[MEAN_TEMPERATURE_LOSS] += (
-                temperature_learn_info[TEMPERATURE_LOSS].item()
-                / self._num_gradient_steps
+            learn_info[w.LOSSES][MEAN_TEMPERATURE_LOSS] += (
+                temperature_learn_info[Q_LOSS].item() / self._num_gradient_steps
             )
-            learn_info[MEAN_TEMPERATURE] += (
-                temperature_learn_info[TEMPERATURE].item() / self._num_gradient_steps
+            learn_info[w.LOSSES][MEAN_Q_LOSS] += (
+                q_learn_info[Q_LOSS].item() / self._num_gradient_steps
             )
-            learn_info[MEAN_CURR_Q] += (
+            learn_info[w.Q_VALUES][MEAN_CURR_Q] += (
                 q_learn_info[MEAN_CURR_Q].item() / self._num_gradient_steps
             )
-            learn_info[MEAN_NEXT_Q] += (
+            learn_info[w.Q_VALUES][MEAN_NEXT_Q] += (
                 q_learn_info[MEAN_NEXT_Q].item() / self._num_gradient_steps
             )
-            learn_info[MAX_CURR_Q] = max(
-                q_learn_info[MAX_CURR_Q], q_learn_info[MAX_CURR_Q].item()
+            learn_info[w.Q_VALUES][MAX_CURR_Q] = max(
+                learn_info[w.Q_VALUES][MAX_CURR_Q], q_learn_info[MAX_CURR_Q].item()
             )
-            learn_info[MAX_NEXT_Q] = max(
-                q_learn_info[MAX_NEXT_Q], q_learn_info[MAX_NEXT_Q].item()
+            learn_info[w.Q_VALUES][MAX_NEXT_Q] = max(
+                learn_info[w.Q_VALUES][MAX_NEXT_Q], q_learn_info[MAX_NEXT_Q].item()
             )
-            learn_info[MIN_CURR_Q] = min(
-                q_learn_info[MIN_CURR_Q], q_learn_info[MIN_CURR_Q].item()
+            learn_info[w.Q_VALUES][MIN_CURR_Q] = min(
+                learn_info[w.Q_VALUES][MIN_CURR_Q], q_learn_info[MIN_CURR_Q].item()
             )
-            learn_info[MIN_NEXT_Q] = min(
-                q_learn_info[MIN_NEXT_Q], q_learn_info[MIN_NEXT_Q].item()
+            learn_info[w.Q_VALUES][MIN_NEXT_Q] = min(
+                learn_info[w.Q_VALUES][MIN_NEXT_Q], q_learn_info[MIN_NEXT_Q].item()
             )
+
+            learn_info[w.ACTION_LOG_PROBS]["max_q_log_prob"] = q_learn_info[
+                "max_q_log_prob"
+            ]
+            learn_info[w.ACTION_LOG_PROBS]["min_q_log_prob"] = q_learn_info[
+                "min_q_log_prob"
+            ]
+            learn_info[w.ACTION_LOG_PROBS]["mean_q_log_prob"] = q_learn_info[
+                "mean_q_log_prob"
+            ]
+            learn_info[w.ACTION_LOG_PROBS]["max_policy_log_prob"] = policy_learn_info[
+                "max_policy_log_prob"
+            ]
+            learn_info[w.ACTION_LOG_PROBS]["min_policy_log_prob"] = policy_learn_info[
+                "min_policy_log_prob"
+            ]
+            learn_info[w.ACTION_LOG_PROBS]["mean_policy_log_prob"] = policy_learn_info[
+                "mean_policy_log_prob"
+            ]
+            learn_info[w.ACTION_LOG_PROBS][
+                "max_temperature_log_prob"
+            ] = temperature_learn_info["max_temperature_log_prob"]
+            learn_info[w.ACTION_LOG_PROBS][
+                "min_temperature_log_prob"
+            ] = temperature_learn_info["min_temperature_log_prob"]
+            learn_info[w.ACTION_LOG_PROBS][
+                "mean_temperature_log_prob"
+            ] = temperature_learn_info["mean_temperature_log_prob"]

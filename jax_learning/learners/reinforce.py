@@ -15,6 +15,8 @@ from jax_learning.losses.policy_loss import reinforce_loss
 from jax_learning.losses.value_loss import monte_carlo_returns
 from jax_learning.models import StochasticPolicy
 
+import jax_learning.wandb_constants as w
+
 POLICY = "policy"
 LOSS = "loss"
 MEAN_LOSS = "mean_loss"
@@ -35,7 +37,7 @@ class REINFORCE(ReinforcementLearner):
         self._sample_idxes = np.arange(self._update_frequency)
 
         @eqx.filter_grad(has_aux=True)
-        def reinforce_loss(
+        def compute_loss(
             policy: StochasticPolicy,
             obss: np.ndarray,
             h_states: np.ndarray,
@@ -60,7 +62,7 @@ class REINFORCE(ReinforcementLearner):
             acts: np.ndarray,
             rets: np.ndarray,
         ) -> Tuple[StochasticPolicy, optax.OptState, jax.tree_util.PyTreeDef, dict]:
-            grads, learn_info = reinforce_loss(policy, obss, h_states, acts, rets)
+            grads, learn_info = compute_loss(policy, obss, h_states, acts, rets)
 
             updates, opt_state = opt.update(grads, opt_state)
             policy = eqx.apply_updates(policy, updates)
@@ -101,5 +103,7 @@ class REINFORCE(ReinforcementLearner):
         self._model[POLICY] = policy
         self._opt_state[POLICY] = opt_state
 
-        learn_info[MEAN_LOSS] = curr_learn_info[LOSS].item()
+        learn_info[w.LOSSES] = {
+            MEAN_LOSS: curr_learn_info[LOSS].item(),
+        }
         self.buffer.clear()

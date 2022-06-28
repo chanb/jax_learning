@@ -26,3 +26,5 @@ NORMALIZE_OBS = "normalize_obs"
 NORMALIZE_VALUE = "normalize_value"
 
 EXPLORATION_STRATEGY = "exploration_strategy"
+
+CLIP_ACTION = "clip_action"
