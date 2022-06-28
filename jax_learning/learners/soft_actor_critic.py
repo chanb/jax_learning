@@ -285,9 +285,6 @@ class SAC(LearnerWithTargetNetwork):
             return
 
         learn_info[f"{w.LOSSES}/{MEAN_Q_LOSS}"] = 0.0
-        learn_info[f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}"] = 0.0
-        learn_info[f"{w.LOSSES}/{MEAN_POLICY_LOSS}"] = 0.0
-        learn_info[f"{w.TRAIN}/{MEAN_TEMPERATURE}"] = 0.0
         learn_info[f"{w.Q_VALUES}/{MEAN_CURR_Q}"] = 0.0
         learn_info[f"{w.Q_VALUES}/{MEAN_NEXT_Q}"] = 0.0
         learn_info[f"{w.Q_VALUES}/{MAX_CURR_Q}"] = -np.inf
@@ -297,12 +294,6 @@ class SAC(LearnerWithTargetNetwork):
         learn_info[f"{w.ACTION_LOG_PROBS}/max_q_log_prob"] = 0.0
         learn_info[f"{w.ACTION_LOG_PROBS}/min_q_log_prob"] = 0.0
         learn_info[f"{w.ACTION_LOG_PROBS}/mean_q_log_prob"] = 0.0
-        learn_info[f"{w.ACTION_LOG_PROBS}/max_policy_log_prob"] = 0.0
-        learn_info[f"{w.ACTION_LOG_PROBS}/min_policy_log_prob"] = 0.0
-        learn_info[f"{w.ACTION_LOG_PROBS}/mean_policy_log_prob"] = 0.0
-        learn_info[f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob"] = 0.0
-        learn_info[f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob"] = 0.0
-        learn_info[f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob"] = 0.0
 
         for update_i in range(self._num_gradient_steps):
             (
@@ -350,6 +341,10 @@ class SAC(LearnerWithTargetNetwork):
             self._opt_state[Q] = opt_state
 
             if self._step % self._actor_update_frequency == 0:
+                learn_info.setdefault(f"{w.LOSSES}/{MEAN_POLICY_LOSS}", 0.0)
+                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/max_policy_log_prob", 0.0)
+                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/min_policy_log_prob", 0.0)
+                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/mean_policy_log_prob", 0.0)
                 (
                     policy,
                     opt_state,
@@ -369,7 +364,25 @@ class SAC(LearnerWithTargetNetwork):
                 self._model[POLICY] = policy
                 self._opt_state[POLICY] = opt_state
 
+                learn_info[f"{w.LOSSES}/{MEAN_POLICY_LOSS}"] += (
+                    policy_learn_info[POLICY_LOSS].item() / self._num_gradient_steps
+                )
+                learn_info[
+                    f"{w.ACTION_LOG_PROBS}/max_policy_log_prob"
+                ] = policy_learn_info["max_policy_log_prob"]
+                learn_info[
+                    f"{w.ACTION_LOG_PROBS}/min_policy_log_prob"
+                ] = policy_learn_info["min_policy_log_prob"]
+                learn_info[
+                    f"{w.ACTION_LOG_PROBS}/mean_policy_log_prob"
+                ] = policy_learn_info["mean_policy_log_prob"]
+
                 if self._target_entropy is not None:
+                    learn_info(f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}", 0.0)
+                    learn_info(f"{w.TRAIN}/{MEAN_TEMPERATURE}", 0.0)
+                    learn_info(f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0)
+                    learn_info(f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0)
+                    learn_info(f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0)
                     (
                         temperature,
                         opt_state,
@@ -387,22 +400,29 @@ class SAC(LearnerWithTargetNetwork):
                     self._model[TEMPERATURE] = temperature
                     self._opt_state[TEMPERATURE] = opt_state
 
+                    learn_info[f"{w.TRAIN}/{MEAN_TEMPERATURE}"] += (
+                        temperature_learn_info[TEMPERATURE].item()
+                        / self._num_gradient_steps
+                    )
+                    learn_info[f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}"] += (
+                        temperature_learn_info[TEMPERATURE_LOSS].item()
+                        / self._num_gradient_steps
+                    )
+                    learn_info[
+                        f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob"
+                    ] = temperature_learn_info["max_temperature_log_prob"]
+                    learn_info[
+                        f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob"
+                    ] = temperature_learn_info["min_temperature_log_prob"]
+                    learn_info[
+                        f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob"
+                    ] = temperature_learn_info["mean_temperature_log_prob"]
+
             if self._step % self._target_update_frequency == 0:
                 self.update_target_model(model_key=Q)
 
-            learn_info[f"{w.LOSSES}/{MEAN_POLICY_LOSS}"] += (
-                policy_learn_info[POLICY_LOSS].item() / self._num_gradient_steps
-            )
-            learn_info[f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}"] += (
-                temperature_learn_info[TEMPERATURE_LOSS].item()
-                / self._num_gradient_steps
-            )
             learn_info[f"{w.LOSSES}/{MEAN_Q_LOSS}"] += (
                 q_learn_info[Q_LOSS].item() / self._num_gradient_steps
-            )
-
-            learn_info[f"{w.TRAIN}/{MEAN_TEMPERATURE}"] += (
-                temperature_learn_info[TEMPERATURE].item() / self._num_gradient_steps
             )
 
             learn_info[f"{w.Q_VALUES}/{MEAN_CURR_Q}"] += (
@@ -437,21 +457,3 @@ class SAC(LearnerWithTargetNetwork):
             learn_info[f"{w.ACTION_LOG_PROBS}/mean_q_log_prob"] = q_learn_info[
                 "mean_q_log_prob"
             ]
-            learn_info[f"{w.ACTION_LOG_PROBS}/max_policy_log_prob"] = policy_learn_info[
-                "max_policy_log_prob"
-            ]
-            learn_info[f"{w.ACTION_LOG_PROBS}/min_policy_log_prob"] = policy_learn_info[
-                "min_policy_log_prob"
-            ]
-            learn_info[
-                f"{w.ACTION_LOG_PROBS}/mean_policy_log_prob"
-            ] = policy_learn_info["mean_policy_log_prob"]
-            learn_info[
-                f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob"
-            ] = temperature_learn_info["max_temperature_log_prob"]
-            learn_info[
-                f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob"
-            ] = temperature_learn_info["min_temperature_log_prob"]
-            learn_info[
-                f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob"
-            ] = temperature_learn_info["mean_temperature_log_prob"]

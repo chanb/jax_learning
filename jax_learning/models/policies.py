@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 
-from jax_learning.distributions import Distribution, Normal
+from jax_learning.distributions import Normal
 from jax_learning.distributions.transforms import TanhTransform
 from jax_learning.models import StochasticPolicy, MLP
 
@@ -34,28 +34,35 @@ class MLPGaussianPolicy(StochasticPolicy):
     def deterministic_action(
         self, obs: np.ndarray, h_state: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        act_mean, _ = jnp.split(self.policy(obs), 2, axis=-1)
+        act_mean, _ = self.dist_params(obs, h_state)
         return act_mean, h_state
 
     def random_action(
         self, obs: np.ndarray, h_state: np.ndarray, key: jrandom.PRNGKey
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        dist = self.dist(obs, h_state)
-        act = dist.sample(key)
+        act_mean, act_std = self.dist_params(obs, h_state)
+        act = Normal.sample(act_mean, act_std, key)
         return act, h_state
 
     def act_lprob(
         self, obs: np.ndarray, h_state: np.ndarray, key: jrandom.PRNGKey
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        dist = self.dist(obs, h_state)
-        act = dist.sample(key)
-        lprob = dist.lprob(act)
+        act_mean, act_std = self.dist_params(obs, h_state)
+        act = Normal.sample(act_mean, act_std, key)
+        lprob = Normal.lprob(act_mean, act_std, act)
         return act, lprob, h_state
 
-    def dist(self, obs: np.ndarray, h_state: np.ndarray) -> Distribution:
+    def dist_params(self, obs: np.ndarray, h_state: np.ndarray) -> Sequence[np.ndarray]:
         act_mean, act_raw_std = jnp.split(self.policy(obs), 2, axis=-1)
         act_std = jax.nn.softplus(act_raw_std) + self.min_std
-        return Normal(act_mean, act_std)
+        return act_mean, act_std
+
+    def lprob(
+        self, obs: np.ndarray, h_state: np.ndarray, act: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        act_mean, act_std = self.dist_params(obs, h_state)
+        lprob = Normal.lprob(act_mean, act_std, act)
+        return lprob, h_state
 
 
 class MLPSquashedGaussianPolicy(MLPGaussianPolicy):
@@ -73,28 +80,33 @@ class MLPSquashedGaussianPolicy(MLPGaussianPolicy):
     def deterministic_action(
         self, obs: np.ndarray, h_state: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        act_mean, _ = jnp.split(self.policy(obs), 2, axis=-1)
+        act_mean, _ = self.dist_params(obs, h_state)
         act_t = TanhTransform.transform(act_mean)
         return act_t, h_state
 
     def random_action(
         self, obs: np.ndarray, h_state: np.ndarray, key: jrandom.PRNGKey
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        dist = self.dist(obs, h_state)
-        act = dist.sample(key)
+        act_mean, act_std = self.dist_params(obs, h_state)
+        act = Normal.sample(act_mean, act_std, key)
         act_t = TanhTransform.transform(act)
         return act_t, h_state
 
     def act_lprob(
         self, obs: np.ndarray, h_state: np.ndarray, key: jrandom.PRNGKey
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        dist = self.dist(obs, h_state)
-        act = dist.sample(key)
+        act_mean, act_std = self.dist_params(obs, h_state)
+        act = Normal.sample(act_mean, act_std, key)
         act_t = TanhTransform.transform(act)
-        lprob = dist.lprob(act) - TanhTransform.log_abs_det_jacobian(act, act_t)
+        lprob = Normal.lprob(act_mean, act_std, act)
+        lprob = lprob - TanhTransform.log_abs_det_jacobian(act, act_t)
         return act, lprob, h_state
 
-    def dist(self, obs: np.ndarray, h_state: np.ndarray) -> Distribution:
-        act_mean, act_raw_std = jnp.split(self.policy(obs), 2, axis=-1)
-        act_std = jax.nn.softplus(act_raw_std) + self.min_std
-        return Normal(act_mean, act_std)
+    def lprob(
+        self, obs: np.ndarray, h_state: np.ndarray, act: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        act_t = jnp.arctanh(act)
+        act_mean, act_std = self.dist_params(obs, h_state)
+        lprob = Normal.lprob(act_mean, act_std, act)
+        lprob = lprob - TanhTransform.log_abs_det_jacobian(act, act_t)
+        return lprob, h_state
