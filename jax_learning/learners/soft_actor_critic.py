@@ -401,7 +401,9 @@ class SAC(LearnerWithTargetNetwork):
                 q_learn_info[Q_LOSS].item() / self._num_gradient_steps
             )
 
-            learn_info[f"{w.TRAIN}/{MEAN_TEMPERATURE}"] += temperature_learn_info[TEMPERATURE].item() / self._num_gradient_steps
+            learn_info[f"{w.TRAIN}/{MEAN_TEMPERATURE}"] += (
+                temperature_learn_info[TEMPERATURE].item() / self._num_gradient_steps
+            )
 
             learn_info[f"{w.Q_VALUES}/{MEAN_CURR_Q}"] += (
                 q_learn_info[MEAN_CURR_Q].item() / self._num_gradient_steps
@@ -410,16 +412,20 @@ class SAC(LearnerWithTargetNetwork):
                 q_learn_info[MEAN_NEXT_Q].item() / self._num_gradient_steps
             )
             learn_info[f"{w.Q_VALUES}/{MAX_CURR_Q}"] = max(
-                learn_info[f"{w.Q_VALUES}/{MAX_CURR_Q}"], q_learn_info[MAX_CURR_Q].item()
+                learn_info[f"{w.Q_VALUES}/{MAX_CURR_Q}"],
+                q_learn_info[MAX_CURR_Q].item(),
             )
             learn_info[f"{w.Q_VALUES}/{MAX_NEXT_Q}"] = max(
-                learn_info[f"{w.Q_VALUES}/{MAX_NEXT_Q}"], q_learn_info[MAX_NEXT_Q].item()
+                learn_info[f"{w.Q_VALUES}/{MAX_NEXT_Q}"],
+                q_learn_info[MAX_NEXT_Q].item(),
             )
             learn_info[f"{w.Q_VALUES}/{MIN_CURR_Q}"] = min(
-                learn_info[f"{w.Q_VALUES}/{MIN_CURR_Q}"], q_learn_info[MIN_CURR_Q].item()
+                learn_info[f"{w.Q_VALUES}/{MIN_CURR_Q}"],
+                q_learn_info[MIN_CURR_Q].item(),
             )
             learn_info[f"{w.Q_VALUES}/{MIN_NEXT_Q}"] = min(
-                learn_info[f"{w.Q_VALUES}/{MIN_NEXT_Q}"], q_learn_info[MIN_NEXT_Q].item()
+                learn_info[f"{w.Q_VALUES}/{MIN_NEXT_Q}"],
+                q_learn_info[MIN_NEXT_Q].item(),
             )
 
             learn_info[f"{w.ACTION_LOG_PROBS}/max_q_log_prob"] = q_learn_info[
@@ -437,9 +443,9 @@ class SAC(LearnerWithTargetNetwork):
             learn_info[f"{w.ACTION_LOG_PROBS}/min_policy_log_prob"] = policy_learn_info[
                 "min_policy_log_prob"
             ]
-            learn_info[f"{w.ACTION_LOG_PROBS}/mean_policy_log_prob"] = policy_learn_info[
-                "mean_policy_log_prob"
-            ]
+            learn_info[
+                f"{w.ACTION_LOG_PROBS}/mean_policy_log_prob"
+            ] = policy_learn_info["mean_policy_log_prob"]
             learn_info[
                 f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob"
             ] = temperature_learn_info["max_temperature_log_prob"]
