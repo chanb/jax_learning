@@ -19,7 +19,7 @@ class Temperature(Model):
 
     def __init__(
         self,
-        init_alpha: float=1.0,
+        init_alpha: float = 1.0,
     ):
         self.log_alpha = jnp.log(init_alpha)
 

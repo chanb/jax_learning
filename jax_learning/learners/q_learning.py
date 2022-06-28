@@ -14,6 +14,8 @@ from jax_learning.learners import LearnerWithTargetNetwork
 from jax_learning.losses.value_loss import q_learning_td_error
 from jax_learning.models import ActionValue
 
+import jax_learning.wandb_constants as w
+
 LOSS = "loss"
 MEAN_LOSS = "mean_loss"
 MEAN_CURR_Q = "mean_curr_q"
@@ -47,7 +49,7 @@ class QLearning(LearnerWithTargetNetwork):
         )
 
         @eqx.filter_grad(has_aux=True)
-        def q_learning_loss(
+        def compute_loss(
             models: Tuple[ActionValue, ActionValue],
             obss: np.ndarray,
             h_states: np.ndarray,
@@ -101,7 +103,7 @@ class QLearning(LearnerWithTargetNetwork):
             ],
             dict,
         ]:
-            grads, learn_info = q_learning_loss(
+            grads, learn_info = compute_loss(
                 (q, target_q),
                 obss,
                 h_states,
@@ -130,13 +132,17 @@ class QLearning(LearnerWithTargetNetwork):
         ):
             return
 
-        learn_info[MEAN_LOSS] = 0.0
-        learn_info[MEAN_CURR_Q] = 0.0
-        learn_info[MEAN_NEXT_Q] = 0.0
-        learn_info[MAX_CURR_Q] = -np.inf
-        learn_info[MAX_NEXT_Q] = -np.inf
-        learn_info[MIN_CURR_Q] = np.inf
-        learn_info[MIN_NEXT_Q] = np.inf
+        learn_info[w.LOSSES] = {
+            MEAN_LOSS: 0.0,
+        }
+        learn_info[w.Q_VALUES] = {
+            MEAN_CURR_Q: 0.0,
+            MEAN_NEXT_Q: 0.0,
+            MAX_CURR_Q: -np.inf,
+            MAX_NEXT_Q: -np.inf,
+            MIN_CURR_Q: np.inf,
+            MIN_NEXT_Q: np.inf,
+        }
         for update_i in range(self._num_gradient_steps):
             (
                 obss,
@@ -184,24 +190,24 @@ class QLearning(LearnerWithTargetNetwork):
             if self._step % self._target_update_frequency == 0:
                 self.update_target_model(model_key=Q)
 
-            learn_info[MEAN_LOSS] += (
+            learn_info[w.LOSSES][MEAN_LOSS] += (
                 curr_learn_info[LOSS].item() / self._num_gradient_steps
             )
-            learn_info[MEAN_CURR_Q] += (
+            learn_info[w.Q_VALUES][MEAN_CURR_Q] += (
                 curr_learn_info[MEAN_CURR_Q].item() / self._num_gradient_steps
             )
-            learn_info[MEAN_NEXT_Q] += (
+            learn_info[w.Q_VALUES][MEAN_NEXT_Q] += (
                 curr_learn_info[MEAN_NEXT_Q].item() / self._num_gradient_steps
             )
-            learn_info[MAX_CURR_Q] = max(
-                learn_info[MAX_CURR_Q], curr_learn_info[MAX_CURR_Q].item()
+            learn_info[w.Q_VALUES][MAX_CURR_Q] = max(
+                learn_info[w.Q_VALUES][MAX_CURR_Q], curr_learn_info[MAX_CURR_Q].item()
             )
-            learn_info[MAX_NEXT_Q] = max(
-                learn_info[MAX_NEXT_Q], curr_learn_info[MAX_NEXT_Q].item()
+            learn_info[w.Q_VALUES][MAX_NEXT_Q] = max(
+                learn_info[w.Q_VALUES][MAX_NEXT_Q], curr_learn_info[MAX_NEXT_Q].item()
             )
-            learn_info[MIN_CURR_Q] = min(
-                learn_info[MIN_CURR_Q], curr_learn_info[MIN_CURR_Q].item()
+            learn_info[w.Q_VALUES][MIN_CURR_Q] = min(
+                learn_info[w.Q_VALUES][MIN_CURR_Q], curr_learn_info[MIN_CURR_Q].item()
             )
-            learn_info[MIN_NEXT_Q] = min(
-                learn_info[MIN_NEXT_Q], curr_learn_info[MIN_NEXT_Q].item()
+            learn_info[w.Q_VALUES][MIN_NEXT_Q] = min(
+                learn_info[w.Q_VALUES][MIN_NEXT_Q], curr_learn_info[MIN_NEXT_Q].item()
             )

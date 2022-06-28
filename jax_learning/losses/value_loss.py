@@ -23,13 +23,15 @@ def q_learning_td_error(
     return curr_q_pred[act] - q_target
 
 
-def clipped_min_q_td_error(curr_q_pred: np.ndarray,
-                           next_q_pred_min: np.ndarray,
-                           next_lprob: np.ndarray,
-                           rew: np.ndarray,
-                           done: np.ndarray,
-                           temp: float,
-                           gamma: float) -> np.ndarray:
-    v_next = (next_q_pred_min - temp * next_lprob)
+def clipped_min_q_td_error(
+    curr_q_pred: np.ndarray,
+    next_q_pred_min: np.ndarray,
+    next_lprob: np.ndarray,
+    rew: np.ndarray,
+    done: np.ndarray,
+    temp: float,
+    gamma: float,
+) -> np.ndarray:
+    v_next = next_q_pred_min - temp * next_lprob
     curr_q_target = rew + gamma * (1 - done) * v_next
     return curr_q_pred - curr_q_target
