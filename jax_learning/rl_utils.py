@@ -37,6 +37,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     log_interval = cfg.log_interval
     render = env.render if cfg.render else lambda: None
     env_rng = cfg.env_rng
+    evaluation_frequency = cfg.evaluation_frequency
 
     random_exploration = getattr(cfg, c.RANDOM_EXPLORATION, None)
     num_exploration = getattr(cfg, c.EXPLORATION_STEPS, 0)
@@ -81,6 +82,9 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
             ep_len = 0
             ep_i += 1
 
+        if evaluation_frequency and (timestep_i + 1) % evaluation_frequency == 0:
+            evaluate(env, agent, cfg.evaluation_cfg, timestep_dict)
+
         metrics_batch.append(timestep_dict)
         if (timestep_i + 1) % log_interval == 0:
             toc = timeit.default_timer()
@@ -94,8 +98,8 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         wandb.log(metrics)
 
 
-def evaluate(env: Any, agent: Agent, cfg: Namespace):
-    max_episodes = cfg.max_episodes
+def evaluate(env: Any, agent: Agent, cfg: Namespace, timestep_dict: dict):
+    num_episodes = cfg.num_episodes
     render = env.render if cfg.render else lambda: None
     env_rng = cfg.env_rng
     clip_action = getattr(cfg, c.CLIP_ACTION, False)
@@ -104,15 +108,15 @@ def evaluate(env: Any, agent: Agent, cfg: Namespace):
         min_action = cfg.min_action
 
     timestep_i = 0
-    metrics_batch = []
-    for ep_i in range(max_episodes):
+    ep_lengths = []
+    ep_returns = []
+    for _ in range(num_episodes):
         obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
         h_state = agent.reset()
         ep_return = 0.0
-        ep_len = 0
+        ep_length = 0
         done = False
         while not done:
-            timestep_dict = {f"{w.EVALUATION}/{w.TIMESTEP}": timestep_i}
             act, h_state = agent.deterministic_action(obs, h_state, timestep_dict)
             env_act = act
             if clip_action:
@@ -120,14 +124,11 @@ def evaluate(env: Any, agent: Agent, cfg: Namespace):
             obs, rew, done, info = env.step(env_act)
             render()
             ep_return += rew
-            ep_len += 1
+            ep_length += 1
             timestep_i += 1
 
             if done:
-                timestep_dict[f"{w.EVALUATION}/{w.EPISODIC_RETURN}"] = ep_return
-                timestep_dict[f"{w.EVALUATION}/{w.EPISODE}"] = ep_i
-                timestep_dict[f"{w.EVALUATION}/{w.EPISODE_LENGTH}"] = ep_len
-
-            metrics_batch.append(timestep_dict)
-    for metrics in metrics_batch:
-        wandb.log(metrics)
+                ep_returns.append(ep_return)
+                ep_lengths.append(ep_length)
+    timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODIC_RETURN}"] = np.mean(ep_returns)
+    timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}"] = np.mean(ep_lengths)
