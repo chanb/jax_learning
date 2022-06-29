@@ -114,7 +114,13 @@ class REINFORCE(ReinforcementLearner):
         learn_info[f"{w.Q_VALUES}/{MIN_RETURN}"] = curr_learn_info[MIN_RETURN].item()
         learn_info[f"{w.Q_VALUES}/{MAX_RETURN}"] = curr_learn_info[MAX_RETURN].item()
         learn_info[f"{w.Q_VALUES}/{MEAN_RETURN}"] = curr_learn_info[MEAN_RETURN].item()
-        learn_info[f"{w.ACTION_LOG_PROBS}/{MIN_LOG_PROBS}"] = curr_learn_info[MIN_LOG_PROBS].item()
-        learn_info[f"{w.ACTION_LOG_PROBS}/{MAX_LOG_PROBS}"] = curr_learn_info[MAX_LOG_PROBS].item()
-        learn_info[f"{w.ACTION_LOG_PROBS}/{MEAN_LOG_PROBS}"] = curr_learn_info[MEAN_LOG_PROBS].item()
+        learn_info[f"{w.ACTION_LOG_PROBS}/{MIN_LOG_PROBS}"] = curr_learn_info[
+            MIN_LOG_PROBS
+        ].item()
+        learn_info[f"{w.ACTION_LOG_PROBS}/{MAX_LOG_PROBS}"] = curr_learn_info[
+            MAX_LOG_PROBS
+        ].item()
+        learn_info[f"{w.ACTION_LOG_PROBS}/{MEAN_LOG_PROBS}"] = curr_learn_info[
+            MEAN_LOG_PROBS
+        ].item()
         self.buffer.clear()
