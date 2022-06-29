@@ -4,7 +4,7 @@ setup(
     name="jax_learning",
     description="Learning algorithms using JAX",
     version="0.1",
-    python_requires=">=3.10",
+    python_requires=">=3.7",
     install_requires=[
         "black==22.3.0",
         "equinox",
