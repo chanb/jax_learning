@@ -1,67 +1,63 @@
-from abc import abstractmethod
-from jax.scipy.stats.norm import logpdf as normal_lprob
+from abc import abstractstaticmethod
 from typing import Optional
 
 import equinox as eqx
 import jax
+import jax.numpy as jnp
 import jax.random as jrandom
+import math
 import numpy as np
 
 
-class Distribution(eqx.Module):
-    @abstractmethod
+class Distribution:
+    @abstractstaticmethod
     def sample(
-        self, key: jrandom.PRNGKey, num_samples: Optional[int] = None
+        *, key: jrandom.PRNGKey, num_samples: Optional[int] = None
     ) -> np.ndarray:
         raise NotImplementedError
 
-    @abstractmethod
-    def lprob(self, x: np.ndarray) -> np.ndarray:
+    @abstractstaticmethod
+    def lprob(*, x: np.ndarray) -> np.ndarray:
         raise NotImplementedError
 
 
 class Categorical(Distribution):
-    logits: np.ndarray
-
-    def __init__(self, logits: np.ndarray):
-        self.logits = logits
-
     @eqx.filter_jit
+    @staticmethod
     def sample(
-        self, key: jrandom.PRNGKey, num_samples: Optional[int] = None
+        logits: np.ndarray, key: jrandom.PRNGKey, num_samples: Optional[int] = None
     ) -> np.ndarray:
         if num_samples:
-            shape = (num_samples, *self.logits.shape[-1])
+            shape = (num_samples, *logits.shape[-1])
         else:
-            shape = self.logits.shape[-1]
-        return jrandom.categorical(key=key, logits=self.logits, shape=shape, axis=-1)
+            shape = logits.shape[-1]
+        return jrandom.categorical(key=key, logits=logits, shape=shape, axis=-1)
 
     @eqx.filter_jit
-    def lprob(self, x: np.ndarray) -> np.ndarray:
-        return self.logits[x] - jax.scipy.special.logsumexp(
-            self.logits, axis=-1, keepdims=True
-        )
+    @staticmethod
+    def lprob(logits: np.ndarray, x: np.ndarray) -> np.ndarray:
+        return logits[x] - jax.scipy.special.logsumexp(logits, axis=-1, keepdims=True)
 
 
 class Normal(Distribution):
-    mean: np.ndarray
-    std: np.ndarray
-
-    def __init__(self, mean: np.ndarray, std: np.ndarray):
-        self.mean = mean
-        self.std = std
-
     @eqx.filter_jit
+    @staticmethod
     def sample(
-        self, key: jrandom.PRNGKey, num_samples: Optional[int] = None
+        mean: np.ndarray,
+        std: np.ndarray,
+        key: jrandom.PRNGKey,
+        num_samples: Optional[int] = None,
     ) -> np.ndarray:
         if num_samples:
-            shape = (num_samples, *self.mean.shape)
+            shape = (num_samples, *mean.shape)
         else:
-            shape = self.mean.shape
-        return self.mean + jrandom.normal(key=key, shape=shape) * self.std
+            shape = mean.shape
+        return mean + jrandom.normal(key=key, shape=shape) * std
 
     @eqx.filter_jit
-    def lprob(self, x: np.ndarray) -> np.ndarray:
-        lprob = normal_lprob(x, loc=self.mean, scale=self.std)
-        return lprob
+    def lprob(mean: np.ndarray, std: np.ndarray, x: np.ndarray) -> np.ndarray:
+        var = std**2
+        log_std = jnp.log(std)
+        return (
+            -((x - mean) ** 2) / (2 * var) - log_std - math.log(math.sqrt(2 * math.pi))
+        )

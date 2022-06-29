@@ -48,6 +48,12 @@ class StochasticPolicy(Policy):
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         raise NotImplementedError
 
+    @abstractmethod
+    def lprob(
+        self, obs: np.ndarray, h_state: np.ndarray, act: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        raise NotImplementedError
+
 
 class ActionValue(Model):
     @abstractmethod

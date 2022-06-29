@@ -9,7 +9,6 @@ import optax
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
-from jax_learning.distributions.utils import get_lprob
 from jax_learning.learners import ReinforcementLearner
 from jax_learning.losses.policy_loss import reinforce_loss
 from jax_learning.losses.value_loss import monte_carlo_returns
@@ -44,8 +43,8 @@ class REINFORCE(ReinforcementLearner):
             acts: np.ndarray,
             rets: np.ndarray,
         ) -> Tuple[np.ndarray, dict]:
-            dists = jax.vmap(policy.dist)(obss, h_states)
-            lprobs = jax.vmap(get_lprob)(dists, acts)
+            lprobs, _ = jax.vmap(policy.lprob)(obss, h_states, acts)
+            lprobs = jnp.sum(lprobs, axis=-1)
             loss = jnp.mean(jax.vmap(reinforce_loss)(lprobs, rets))
             return loss, {
                 LOSS: loss,
