@@ -100,7 +100,7 @@ class MLPSquashedGaussianPolicy(MLPGaussianPolicy):
         act_t = TanhTransform.transform(act)
         lprob = Normal.lprob(act_mean, act_std, act)
         lprob = lprob - TanhTransform.log_abs_det_jacobian(act, act_t)
-        return act, lprob, h_state
+        return act_t, lprob, h_state
 
     def lprob(
         self, obs: np.ndarray, h_state: np.ndarray, act: np.ndarray

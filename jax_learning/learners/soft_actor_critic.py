@@ -81,9 +81,9 @@ class SAC(LearnerWithTargetNetwork):
             keys: Sequence[jrandom.PRNGKey],
         ) -> Tuple[np.ndarray, dict]:
             (q, target_q) = models
-
             curr_xs = jnp.concatenate((obss, acts), axis=-1)
             curr_q_preds, _ = jax.vmap(q.q_values)(curr_xs, h_states)
+            curr_q_preds_min = jnp.min(curr_q_preds, axis=1)
 
             next_acts, next_lprobs, _ = jax.vmap(policy.act_lprob)(
                 next_obss, next_h_states, keys
@@ -108,15 +108,15 @@ class SAC(LearnerWithTargetNetwork):
                 )
 
             td_errors = jax.vmap(batch_td_errors, in_axes=[1])(curr_q_preds)
-            loss = jnp.mean(td_errors**2)
+            loss = jnp.sum(jnp.mean(td_errors**2, axis=0))
             return loss, {
                 Q_LOSS: loss,
-                MAX_NEXT_Q: jnp.max(next_q_preds),
-                MIN_NEXT_Q: jnp.min(next_q_preds),
-                MEAN_NEXT_Q: jnp.mean(next_q_preds),
-                MAX_CURR_Q: jnp.max(curr_q_preds),
-                MIN_CURR_Q: jnp.min(curr_q_preds),
-                MEAN_CURR_Q: jnp.mean(curr_q_preds),
+                MAX_NEXT_Q: jnp.max(next_q_preds_min),
+                MIN_NEXT_Q: jnp.min(next_q_preds_min),
+                MEAN_NEXT_Q: jnp.mean(next_q_preds_min),
+                MAX_CURR_Q: jnp.max(curr_q_preds_min),
+                MIN_CURR_Q: jnp.min(curr_q_preds_min),
+                MEAN_CURR_Q: jnp.mean(curr_q_preds_min),
                 MAX_TD_ERROR: jnp.max(td_errors),
                 MIN_TD_ERROR: jnp.min(td_errors),
                 "max_q_log_prob": jnp.max(next_lprobs),
@@ -166,7 +166,6 @@ class SAC(LearnerWithTargetNetwork):
                 next_h_states,
                 keys,
             )
-
             (q_grads, target_q_grads) = grads
             grads = jax.tree_map(apply_residual_gradient, q_grads, target_q_grads)
 
@@ -175,7 +174,7 @@ class SAC(LearnerWithTargetNetwork):
             return (
                 q,
                 opt_state,
-                (grads, q_grads, target_q_grads),
+                grads,
                 learn_info,
                 sample_key,
             )
@@ -367,12 +366,12 @@ class SAC(LearnerWithTargetNetwork):
                 learn_info[f"{w.LOSSES}/{MEAN_POLICY_LOSS}"] += (
                     policy_learn_info[POLICY_LOSS].item() / self._num_gradient_steps
                 )
-                learn_info[f"{w.ACTION_LOG_PROBS}/max_policy_log_prob"] = policy_learn_info[
-                    "max_policy_log_prob"
-                ]
-                learn_info[f"{w.ACTION_LOG_PROBS}/min_policy_log_prob"] = policy_learn_info[
-                    "min_policy_log_prob"
-                ]
+                learn_info[
+                    f"{w.ACTION_LOG_PROBS}/max_policy_log_prob"
+                ] = policy_learn_info["max_policy_log_prob"]
+                learn_info[
+                    f"{w.ACTION_LOG_PROBS}/min_policy_log_prob"
+                ] = policy_learn_info["min_policy_log_prob"]
                 learn_info[
                     f"{w.ACTION_LOG_PROBS}/mean_policy_log_prob"
                 ] = policy_learn_info["mean_policy_log_prob"]
@@ -401,7 +400,8 @@ class SAC(LearnerWithTargetNetwork):
                     self._opt_state[TEMPERATURE] = opt_state
 
                     learn_info[f"{w.TRAIN}/{MEAN_TEMPERATURE}"] += (
-                        temperature_learn_info[TEMPERATURE].item() / self._num_gradient_steps
+                        temperature_learn_info[TEMPERATURE].item()
+                        / self._num_gradient_steps
                     )
                     learn_info[f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}"] += (
                         temperature_learn_info[TEMPERATURE_LOSS].item()

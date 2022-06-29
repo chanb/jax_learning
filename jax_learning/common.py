@@ -7,7 +7,7 @@ import jax_learning.wandb_constants as w
 
 
 def init_wandb(**kwargs):
-    wandb.init(project=kwargs["project"], group=kwargs["group"])
+    wandb.init(**kwargs)
     wandb.define_metric(w.EPISODE_LENGTH, step_metric=w.EPISODE)
     wandb.define_metric(w.EPISODIC_RETURN, step_metric=w.EPISODE)
 
