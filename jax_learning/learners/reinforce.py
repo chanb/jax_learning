@@ -21,6 +21,10 @@ LOSS = "loss"
 MEAN_LOSS = "mean_loss"
 MAX_RETURN = "max_return"
 MIN_RETURN = "min_return"
+MEAN_RETURN = "mean_return"
+MAX_LOG_PROBS = "max_log_probs"
+MIN_LOG_PROBS = "min_log_probs"
+MEAN_LOG_PROBS = "mean_log_probs"
 
 
 class REINFORCE(ReinforcementLearner):
@@ -50,6 +54,10 @@ class REINFORCE(ReinforcementLearner):
                 LOSS: loss,
                 MAX_RETURN: jnp.max(rets),
                 MIN_RETURN: jnp.min(rets),
+                MEAN_RETURN: jnp.mean(rets),
+                MAX_LOG_PROBS: jnp.max(lprobs),
+                MIN_LOG_PROBS: jnp.min(lprobs),
+                MEAN_LOG_PROBS: jnp.mean(lprobs),
             }
 
         def update_policy(
@@ -103,4 +111,16 @@ class REINFORCE(ReinforcementLearner):
         self._opt_state[POLICY] = opt_state
 
         learn_info[f"{w.LOSSES}/{MEAN_LOSS}"] = curr_learn_info[LOSS].item()
+        learn_info[f"{w.Q_VALUES}/{MIN_RETURN}"] = curr_learn_info[MIN_RETURN].item()
+        learn_info[f"{w.Q_VALUES}/{MAX_RETURN}"] = curr_learn_info[MAX_RETURN].item()
+        learn_info[f"{w.Q_VALUES}/{MEAN_RETURN}"] = curr_learn_info[MEAN_RETURN].item()
+        learn_info[f"{w.ACTION_LOG_PROBS}/{MIN_LOG_PROBS}"] = curr_learn_info[
+            MIN_LOG_PROBS
+        ].item()
+        learn_info[f"{w.ACTION_LOG_PROBS}/{MAX_LOG_PROBS}"] = curr_learn_info[
+            MAX_LOG_PROBS
+        ].item()
+        learn_info[f"{w.ACTION_LOG_PROBS}/{MEAN_LOG_PROBS}"] = curr_learn_info[
+            MEAN_LOG_PROBS
+        ].item()
         self.buffer.clear()
