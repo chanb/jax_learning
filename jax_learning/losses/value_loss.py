@@ -11,6 +11,19 @@ def monte_carlo_returns(
     return rets[:-1]
 
 
+def n_step_bootstrapped_returns(
+    v_preds: np.ndarray,
+    rews: np.ndarray,
+    dones: np.ndarray,
+    gamma: float,
+    lambd: float=1.,
+) -> np.ndarray:
+    rets = np.zeros(v_preds.shape[0])
+    for step in reversed(range(len(rews))):
+        rets[step] = ((1 - lambd) * v_preds[step + 1] + lambd * rets[step + 1]) * gamma * (1 - dones[step]) + rews[step]
+    return rets
+
+
 def q_learning_td_error(
     curr_q_pred: np.ndarray,
     act: np.ndarray,
@@ -35,3 +48,16 @@ def clipped_min_q_td_error(
     v_next = next_q_pred_min - temp * next_lprob
     curr_q_target = rew + gamma * (1 - done) * v_next
     return curr_q_pred - curr_q_target
+
+
+def path_consistency_error(
+    lprobs: np.ndarray,
+    v_preds: np.ndarray,
+    rews: np.ndarray,
+    dones: np.ndarray,
+    temp: np.ndarray,
+    gamma: float,
+) -> np.ndarray:
+    ent_reg_rews = rews - temp * lprobs
+    targets = n_step_bootstrapped_returns(v_preds, ent_reg_rews, dones, gamma)
+    return v_preds[0] - targets[0]
