@@ -10,8 +10,7 @@ from typing import Sequence, Tuple, Dict
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import batch_flatten, to_jnp
-from jax_learning.common import polyak_average_generator
-from jax_learning.learners import LearnerWithTargetNetwork
+from jax_learning.learners import Learner
 from jax_learning.losses.policy_loss import sac_policy_loss
 from jax_learning.losses.temperature_loss import sac_temperature_loss
 from jax_learning.losses.value_loss import clipped_min_q_td_error
@@ -34,23 +33,22 @@ MIN_NEXT_Q = "min_next_q"
 MAX_TD_ERROR = "max_td_error"
 MIN_TD_ERROR = "min_td_error"
 POLICY = "policy"
-Q = "q"
+V = "v"
 TEMPERATURE = "temperature"
 MEAN_TEMPERATURE = "mean_temperature"
 TARGET_ENTROPY = "target_entropy"
 OMEGA = "omega"
 
 
-class SAC(LearnerWithTargetNetwork):
+class PCL(Learner):
     def __init__(
         self,
         model: Dict[str, eqx.Module],
-        target_model: Dict[str, eqx.Module],
         opt: Dict[str, optax.GradientTransformation],
         buffer: ReplayBuffer,
         cfg: Namespace,
     ):
-        super().__init__(model, target_model, opt, buffer, cfg)
+        super().__init__(model, opt, buffer, cfg)
 
         self._batch_size = cfg.batch_size
         self._num_gradient_steps = cfg.num_gradient_steps
@@ -66,9 +64,8 @@ class SAC(LearnerWithTargetNetwork):
         )
 
         @eqx.filter_grad(has_aux=True)
-        def q_loss(
-            models: Tuple[ActionValue, ActionValue],
-            policy: StochasticPolicy,
+        def pc_loss(
+            models: Tuple[StochasticPolicy, ActionValue],
             temperature: Temperature,
             obss: np.ndarray,
             h_states: np.ndarray,
@@ -79,7 +76,7 @@ class SAC(LearnerWithTargetNetwork):
             next_h_states: np.ndarray,
             keys: Sequence[jrandom.PRNGKey],
         ) -> Tuple[np.ndarray, dict]:
-            (q, target_q) = models
+            (policy, v) = models
             curr_xs = jnp.concatenate((obss, acts), axis=-1)
             curr_q_preds, _ = jax.vmap(q.q_values)(curr_xs, h_states)
             curr_q_preds_min = jnp.min(curr_q_preds, axis=1)
@@ -90,7 +87,7 @@ class SAC(LearnerWithTargetNetwork):
             next_lprobs = jnp.sum(next_lprobs, axis=-1, keepdims=True)
 
             next_xs = jnp.concatenate((next_obss, next_acts), axis=-1)
-            next_q_preds, _ = jax.vmap(target_q.q_values)(next_xs, next_h_states)
+            next_q_preds, _ = jax.vmap(v.q_values)(next_xs, next_h_states)
             next_q_preds_min = jnp.min(next_q_preds, axis=1)
 
             temp = temperature()
@@ -123,15 +120,11 @@ class SAC(LearnerWithTargetNetwork):
                 "mean_q_log_prob": jnp.mean(next_lprobs),
             }
 
-        apply_residual_gradient = polyak_average_generator(getattr(cfg, OMEGA, 1.0))
-
-        def update_q(
-            q: ActionValue,
-            target_q: ActionValue,
-            policy: StochasticPolicy,
+        def update_models(
+            models: Tuple[StochasticPolicy, ActionValue],
             temperature: Temperature,
-            opt: optax.GradientTransformation,
-            opt_state: optax.OptState,
+            opt: Tuple[optax.GradientTransformation, optax.GradientTransformation],
+            opt_state: Tuple[optax.OptState, optax.OptState],
             obss: np.ndarray,
             h_states: np.ndarray,
             acts: np.ndarray,
@@ -152,9 +145,8 @@ class SAC(LearnerWithTargetNetwork):
         ]:
             sample_key = jrandom.split(self._sample_key, num=1)[0]
             keys = jrandom.split(self._sample_key, num=self._batch_size)
-            grads, learn_info = q_loss(
-                (q, target_q),
-                policy,
+            grads, learn_info = pc_loss(
+                models,
                 temperature,
                 obss,
                 h_states,
@@ -165,8 +157,7 @@ class SAC(LearnerWithTargetNetwork):
                 next_h_states,
                 keys,
             )
-            (q_grads, target_q_grads) = grads
-            grads = jax.tree_map(apply_residual_gradient, q_grads, target_q_grads)
+            (policy_grads, v_grads) = grads
 
             updates, opt_state = opt.update(grads, opt_state)
             q = eqx.apply_updates(q, updates)
@@ -177,57 +168,6 @@ class SAC(LearnerWithTargetNetwork):
                 learn_info,
                 sample_key,
             )
-
-        _sac_policy_loss = jax.vmap(sac_policy_loss, in_axes=[0, 0, None])
-
-        @eqx.filter_grad(has_aux=True)
-        def policy_loss(
-            policy: StochasticPolicy,
-            q: ActionValue,
-            temperature: Temperature,
-            obss: np.ndarray,
-            h_states: np.ndarray,
-            keys: Sequence[jrandom.PRNGKey],
-        ) -> Tuple[np.ndarray, dict]:
-            acts, lprobs, _ = jax.vmap(policy.act_lprob)(obss, h_states, keys)
-            lprobs = jnp.sum(lprobs, axis=-1, keepdims=True)
-            curr_xs = jnp.concatenate((obss, acts), axis=-1)
-            curr_q_preds, _ = jax.vmap(q.q_values)(curr_xs, h_states)
-            curr_q_preds_min = jnp.min(curr_q_preds, axis=1)
-            temp = temperature()
-
-            loss = jnp.mean(_sac_policy_loss(curr_q_preds_min, lprobs, temp))
-            return loss, {
-                POLICY_LOSS: loss,
-                "max_policy_log_prob": jnp.max(lprobs),
-                "min_policy_log_prob": jnp.min(lprobs),
-                "mean_policy_log_prob": jnp.mean(lprobs),
-            }
-
-        def update_policy(
-            policy: StochasticPolicy,
-            q: ActionValue,
-            temperature: Temperature,
-            opt: optax.GradientTransformation,
-            opt_state: optax.OptState,
-            obss: np.ndarray,
-            h_states: np.ndarray,
-            acts: np.ndarray,
-        ) -> Tuple[
-            ActionValue, optax.OptState, jax.tree_util.PyTreeDef, dict, jrandom.PRNGKey
-        ]:
-            sample_key = jrandom.split(self._sample_key, num=1)[0]
-            keys = jrandom.split(self._sample_key, num=self._batch_size)
-
-            grads, learn_info = policy_loss(
-                policy, q, temperature, obss, h_states, keys
-            )
-
-            updates, opt_state = opt.update(grads, opt_state)
-            policy = eqx.apply_updates(policy, updates)
-            return policy, opt_state, grads, learn_info, sample_key
-
-        _sac_temperature_loss = jax.vmap(sac_temperature_loss, in_axes=[None, 0, None])
 
         @eqx.filter_grad(has_aux=True)
         def temperature_loss(
@@ -269,8 +209,7 @@ class SAC(LearnerWithTargetNetwork):
             temperature = eqx.apply_updates(temperature, updates)
             return temperature, opt_state, grads, learn_info, sample_key
 
-        self.update_q = eqx.filter_jit(update_q)
-        self.update_policy = eqx.filter_jit(update_policy)
+        self.update_models = eqx.filter_jit(update_models)
         self.update_temperature = eqx.filter_jit(update_temperature)
 
     def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
@@ -319,13 +258,11 @@ class SAC(LearnerWithTargetNetwork):
                     obss, h_states, acts, rews, dones, next_obss, next_h_states
                 )
             )
-            q, opt_state, grads, q_learn_info, self._sample_key = self.update_q(
-                q=self.model[Q],
-                target_q=self.target_model[Q],
-                policy=self.model[POLICY],
+            models, opt_state, grads, q_learn_info, self._sample_key = self.update_models(
+                models=(self.model[POLICY], self.model[V]),
                 temperature=self.model[TEMPERATURE],
-                opt=self.opt[Q],
-                opt_state=self.opt_state[Q],
+                opt=(self.opt[POLICY], self.opt[V]),
+                opt_state=(self.opt_state[POLICY], self.opt_state[V]),
                 obss=obss,
                 h_states=h_states,
                 acts=acts,
@@ -335,89 +272,49 @@ class SAC(LearnerWithTargetNetwork):
                 next_h_states=next_h_states,
             )
 
-            self._model[Q] = q
-            self._opt_state[Q] = opt_state
+            self._model[POLICY], self._model[V] = models
+            self._opt_state[POLICY], self._opt_state[V] = opt_state
 
-            if self._step % self._actor_update_frequency == 0:
-                learn_info.setdefault(f"{w.LOSSES}/{MEAN_POLICY_LOSS}", 0.0)
-                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/max_policy_log_prob", 0.0)
-                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/min_policy_log_prob", 0.0)
-                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/mean_policy_log_prob", 0.0)
+            if self._target_entropy is not None:
+                learn_info(f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}", 0.0)
+                learn_info(f"{w.TRAIN}/{MEAN_TEMPERATURE}", 0.0)
+                learn_info(f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0)
+                learn_info(f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0)
+                learn_info(f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0)
                 (
-                    policy,
+                    temperature,
                     opt_state,
                     grads,
-                    policy_learn_info,
+                    temperature_learn_info,
                     self._sample_key,
-                ) = self.update_policy(
+                ) = self.update_temperature(
                     policy=self.model[POLICY],
-                    q=self.model[Q],
                     temperature=self.model[TEMPERATURE],
-                    opt=self.opt[POLICY],
-                    opt_state=self.opt_state[POLICY],
+                    opt=self.opt[TEMPERATURE],
+                    opt_state=self.opt_state[TEMPERATURE],
                     obss=obss,
                     h_states=h_states,
-                    acts=acts,
                 )
-                self._model[POLICY] = policy
-                self._opt_state[POLICY] = opt_state
+                self._model[TEMPERATURE] = temperature
+                self._opt_state[TEMPERATURE] = opt_state
 
-                learn_info[f"{w.LOSSES}/{MEAN_POLICY_LOSS}"] += (
-                    policy_learn_info[POLICY_LOSS].item() / self._num_gradient_steps
+                learn_info[f"{w.TRAIN}/{MEAN_TEMPERATURE}"] += (
+                    temperature_learn_info[TEMPERATURE].item()
+                    / self._num_gradient_steps
+                )
+                learn_info[f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}"] += (
+                    temperature_learn_info[TEMPERATURE_LOSS].item()
+                    / self._num_gradient_steps
                 )
                 learn_info[
-                    f"{w.ACTION_LOG_PROBS}/max_policy_log_prob"
-                ] = policy_learn_info["max_policy_log_prob"]
+                    f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob"
+                ] = temperature_learn_info["max_temperature_log_prob"]
                 learn_info[
-                    f"{w.ACTION_LOG_PROBS}/min_policy_log_prob"
-                ] = policy_learn_info["min_policy_log_prob"]
+                    f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob"
+                ] = temperature_learn_info["min_temperature_log_prob"]
                 learn_info[
-                    f"{w.ACTION_LOG_PROBS}/mean_policy_log_prob"
-                ] = policy_learn_info["mean_policy_log_prob"]
-
-                if self._target_entropy is not None:
-                    learn_info(f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}", 0.0)
-                    learn_info(f"{w.TRAIN}/{MEAN_TEMPERATURE}", 0.0)
-                    learn_info(f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0)
-                    learn_info(f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0)
-                    learn_info(f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0)
-                    (
-                        temperature,
-                        opt_state,
-                        grads,
-                        temperature_learn_info,
-                        self._sample_key,
-                    ) = self.update_temperature(
-                        policy=self.model[POLICY],
-                        temperature=self.model[TEMPERATURE],
-                        opt=self.opt[TEMPERATURE],
-                        opt_state=self.opt_state[TEMPERATURE],
-                        obss=obss,
-                        h_states=h_states,
-                    )
-                    self._model[TEMPERATURE] = temperature
-                    self._opt_state[TEMPERATURE] = opt_state
-
-                    learn_info[f"{w.TRAIN}/{MEAN_TEMPERATURE}"] += (
-                        temperature_learn_info[TEMPERATURE].item()
-                        / self._num_gradient_steps
-                    )
-                    learn_info[f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}"] += (
-                        temperature_learn_info[TEMPERATURE_LOSS].item()
-                        / self._num_gradient_steps
-                    )
-                    learn_info[
-                        f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob"
-                    ] = temperature_learn_info["max_temperature_log_prob"]
-                    learn_info[
-                        f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob"
-                    ] = temperature_learn_info["min_temperature_log_prob"]
-                    learn_info[
-                        f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob"
-                    ] = temperature_learn_info["mean_temperature_log_prob"]
-
-            if self._step % self._target_update_frequency == 0:
-                self.update_target_model(model_key=Q)
+                    f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob"
+                ] = temperature_learn_info["mean_temperature_log_prob"]
 
             learn_info[f"{w.LOSSES}/{MEAN_Q_LOSS}"] += (
                 q_learn_info[Q_LOSS].item() / self._num_gradient_steps
