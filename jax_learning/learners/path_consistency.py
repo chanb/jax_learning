@@ -258,7 +258,13 @@ class PCL(Learner):
                     obss, h_states, acts, rews, dones, next_obss, next_h_states
                 )
             )
-            models, opt_state, grads, q_learn_info, self._sample_key = self.update_models(
+            (
+                models,
+                opt_state,
+                grads,
+                q_learn_info,
+                self._sample_key,
+            ) = self.update_models(
                 models=(self.model[POLICY], self.model[V]),
                 temperature=self.model[TEMPERATURE],
                 opt=(self.opt[POLICY], self.opt[V]),

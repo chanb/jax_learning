@@ -16,11 +16,13 @@ def n_step_bootstrapped_returns(
     rews: np.ndarray,
     dones: np.ndarray,
     gamma: float,
-    lambd: float=1.,
+    lambd: float = 1.0,
 ) -> np.ndarray:
     rets = np.zeros(v_preds.shape[0])
     for step in reversed(range(len(rews))):
-        rets[step] = ((1 - lambd) * v_preds[step + 1] + lambd * rets[step + 1]) * gamma * (1 - dones[step]) + rews[step]
+        rets[step] = (
+            (1 - lambd) * v_preds[step + 1] + lambd * rets[step + 1]
+        ) * gamma * (1 - dones[step]) + rews[step]
     return rets
 
 
