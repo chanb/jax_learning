@@ -53,8 +53,8 @@ class PCL(Learner):
         self._target_entropy = getattr(cfg, TARGET_ENTROPY, None)
         self._sample_key = jrandom.PRNGKey(cfg.seed)
 
-        _clipped_min_q_td_error = jax.vmap(
-            clipped_min_q_td_error, in_axes=[0, 0, 0, 0, 0, None, None]
+        _path_consistency_error = jax.vmap(
+            path_consistency_error, in_axes=[0, 0, 0, 0, 0, None, None]
         )
 
         @eqx.filter_grad(has_aux=True)
@@ -65,13 +65,26 @@ class PCL(Learner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            mask: np.ndarray,
+            dones: np.ndarray,
             keys: Sequence[jrandom.PRNGKey],
         ) -> Tuple[np.ndarray, dict]:
             (policy, v) = models
             curr_xs = jnp.concatenate((obss, acts), axis=-1)
             curr_q_preds, _ = jax.vmap(q.q_values)(curr_xs, h_states)
             curr_q_preds_min = jnp.min(curr_q_preds, axis=1)
+
+            temp = temperature()
+
+            def batch_pc_errors(curr_q_pred):
+                return _path_consistency_error(
+                    curr_q_pred,
+                    next_q_preds_min,
+                    next_lprobs,
+                    rews,
+                    dones,
+                    temp,
+                    self._gamma,
+                )
 
             loss = 0.
             return loss, {
@@ -90,7 +103,7 @@ class PCL(Learner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            mask: np.ndarray,
+            dones: np.ndarray,
         ) -> Tuple[
             ActionValue,
             optax.OptState,
@@ -111,7 +124,7 @@ class PCL(Learner):
                 h_states,
                 acts,
                 rews,
-                mask,
+                dones,
                 keys,
             )
             (policy_grads, v_grads) = grads
@@ -193,7 +206,7 @@ class PCL(Learner):
                 h_states,
                 acts,
                 rews,
-                _,
+                dones,
                 _,
                 _,
                 sample_idxes,
@@ -206,13 +219,12 @@ class PCL(Learner):
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
 
-            (obss, h_states, acts, rews) = to_jnp(
+            (obss, h_states, acts, rews, dones) = to_jnp(
                 *batch_flatten(
-                    obss, h_states, acts, rews
+                    obss, h_states, acts, rews, dones
                 )
             )
 
-            sample_mask = (sample_idxes != -1)
             flattened_sample_mask = np.where(sample_idxes.flatten() != -1)
 
             (
@@ -226,11 +238,11 @@ class PCL(Learner):
                 temperature=self.model[TEMPERATURE],
                 opt=(self.opt[POLICY], self.opt[V]),
                 opt_state=(self.opt_state[POLICY], self.opt_state[V]),
-                obss=obss.reshape(*sample_mask.shape, -1),
-                h_states=h_states.reshape(*sample_mask.shape, -1),
-                acts=acts.reshape(*sample_mask.shape, -1),
-                rews=rews.reshape(*sample_mask.shape, -1),
-                mask=sample_mask
+                obss=obss[flattened_sample_mask],
+                h_states=h_states[flattened_sample_mask],
+                acts=acts[flattened_sample_mask],
+                rews=rews[flattened_sample_mask],
+                dones=dones[flattened_sample_mask],
             )
 
             self._model[POLICY], self._model[V] = models
