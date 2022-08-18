@@ -12,6 +12,7 @@ DTYPE = "dtype"
 RNG = "rng"
 
 EPISODE = "episode"
+EPISODE_IDXES = "episode_idxes"
 EPISODE_LENGTH = "episode_length"
 EPISODIC_RETURN = "episodic_return"
 TIMEDIFF = "time_diff"

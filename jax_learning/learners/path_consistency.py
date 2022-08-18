@@ -11,25 +11,19 @@ from typing import Sequence, Tuple, Dict
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import batch_flatten, to_jnp
 from jax_learning.learners import Learner
-from jax_learning.losses.policy_loss import sac_policy_loss
 from jax_learning.losses.temperature_loss import sac_temperature_loss
 from jax_learning.losses.value_loss import clipped_min_q_td_error
 from jax_learning.models import StochasticPolicy, ActionValue, Temperature
 
 import jax_learning.wandb_constants as w
 
-Q_LOSS = "q_loss"
-POLICY_LOSS = "policy_loss"
+PC_LOSS = "pc_loss"
 TEMPERATURE_LOSS = "temperature_loss"
-MEAN_Q_LOSS = "mean_q_loss"
-MEAN_POLICY_LOSS = "mean_policy_loss"
 MEAN_TEMPERATURE_LOSS = "mean_temperature_loss"
+MEAN_PC_LOSS = "mean_pc_loss"
 MEAN_CURR_Q = "mean_curr_q"
-MEAN_NEXT_Q = "mean_next_q"
 MAX_CURR_Q = "max_curr_q"
-MAX_NEXT_Q = "max_next_q"
 MIN_CURR_Q = "min_curr_q"
-MIN_NEXT_Q = "min_next_q"
 MAX_TD_ERROR = "max_td_error"
 MIN_TD_ERROR = "min_td_error"
 POLICY = "policy"
@@ -71,9 +65,7 @@ class PCL(Learner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            dones: np.ndarray,
-            next_obss: np.ndarray,
-            next_h_states: np.ndarray,
+            mask: np.ndarray,
             keys: Sequence[jrandom.PRNGKey],
         ) -> Tuple[np.ndarray, dict]:
             (policy, v) = models
@@ -81,43 +73,12 @@ class PCL(Learner):
             curr_q_preds, _ = jax.vmap(q.q_values)(curr_xs, h_states)
             curr_q_preds_min = jnp.min(curr_q_preds, axis=1)
 
-            next_acts, next_lprobs, _ = jax.vmap(policy.act_lprob)(
-                next_obss, next_h_states, keys
-            )
-            next_lprobs = jnp.sum(next_lprobs, axis=-1, keepdims=True)
-
-            next_xs = jnp.concatenate((next_obss, next_acts), axis=-1)
-            next_q_preds, _ = jax.vmap(v.q_values)(next_xs, next_h_states)
-            next_q_preds_min = jnp.min(next_q_preds, axis=1)
-
-            temp = temperature()
-
-            def batch_td_errors(curr_q_pred):
-                return _clipped_min_q_td_error(
-                    curr_q_pred,
-                    next_q_preds_min,
-                    next_lprobs,
-                    rews,
-                    dones,
-                    temp,
-                    self._gamma,
-                )
-
-            td_errors = jax.vmap(batch_td_errors, in_axes=[1])(curr_q_preds)
-            loss = jnp.sum(jnp.mean(td_errors**2, axis=0))
+            loss = 0.
             return loss, {
-                Q_LOSS: loss,
-                MAX_NEXT_Q: jnp.max(next_q_preds_min),
-                MIN_NEXT_Q: jnp.min(next_q_preds_min),
-                MEAN_NEXT_Q: jnp.mean(next_q_preds_min),
+                PC_LOSS: loss,
                 MAX_CURR_Q: jnp.max(curr_q_preds_min),
                 MIN_CURR_Q: jnp.min(curr_q_preds_min),
                 MEAN_CURR_Q: jnp.mean(curr_q_preds_min),
-                MAX_TD_ERROR: jnp.max(td_errors),
-                MIN_TD_ERROR: jnp.min(td_errors),
-                "max_q_log_prob": jnp.max(next_lprobs),
-                "min_q_log_prob": jnp.min(next_lprobs),
-                "mean_q_log_prob": jnp.mean(next_lprobs),
             }
 
         def update_models(
@@ -129,9 +90,7 @@ class PCL(Learner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            dones: np.ndarray,
-            next_obss: np.ndarray,
-            next_h_states: np.ndarray,
+            mask: np.ndarray,
         ) -> Tuple[
             ActionValue,
             optax.OptState,
@@ -152,9 +111,7 @@ class PCL(Learner):
                 h_states,
                 acts,
                 rews,
-                dones,
-                next_obss,
-                next_h_states,
+                mask,
                 keys,
             )
             (policy_grads, v_grads) = grads
@@ -169,6 +126,7 @@ class PCL(Learner):
                 sample_key,
             )
 
+        _sac_temperature_loss = jax.vmap(sac_temperature_loss, in_axes=[None, 0, None])
         @eqx.filter_grad(has_aux=True)
         def temperature_loss(
             temperature: Temperature,
@@ -221,13 +179,10 @@ class PCL(Learner):
         ):
             return
 
-        learn_info[f"{w.LOSSES}/{MEAN_Q_LOSS}"] = 0.0
+        learn_info[f"{w.LOSSES}/{MEAN_PC_LOSS}"] = 0.0
         learn_info[f"{w.Q_VALUES}/{MEAN_CURR_Q}"] = 0.0
-        learn_info[f"{w.Q_VALUES}/{MEAN_NEXT_Q}"] = 0.0
         learn_info[f"{w.Q_VALUES}/{MAX_CURR_Q}"] = -np.inf
-        learn_info[f"{w.Q_VALUES}/{MAX_NEXT_Q}"] = -np.inf
         learn_info[f"{w.Q_VALUES}/{MIN_CURR_Q}"] = np.inf
-        learn_info[f"{w.Q_VALUES}/{MIN_NEXT_Q}"] = np.inf
         learn_info[f"{w.ACTION_LOG_PROBS}/max_q_log_prob"] = 0.0
         learn_info[f"{w.ACTION_LOG_PROBS}/min_q_log_prob"] = 0.0
         learn_info[f"{w.ACTION_LOG_PROBS}/mean_q_log_prob"] = 0.0
@@ -238,13 +193,11 @@ class PCL(Learner):
                 h_states,
                 acts,
                 rews,
-                dones,
-                next_obss,
-                next_h_states,
                 _,
                 _,
                 _,
-            ) = self.buffer.sample_with_next_obs(
+                sample_idxes,
+            ) = self.buffer.sample(
                 batch_size=self._batch_size,
                 next_obs=next_obs,
                 next_h_state=next_h_state,
@@ -253,29 +206,31 @@ class PCL(Learner):
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
 
-            (obss, h_states, acts, rews, dones, next_obss, next_h_states) = to_jnp(
+            (obss, h_states, acts, rews) = to_jnp(
                 *batch_flatten(
-                    obss, h_states, acts, rews, dones, next_obss, next_h_states
+                    obss, h_states, acts, rews
                 )
             )
+
+            sample_mask = (sample_idxes != -1)
+            flattened_sample_mask = np.where(sample_idxes.flatten() != -1)
+
             (
                 models,
                 opt_state,
                 grads,
-                q_learn_info,
+                pc_learn_info,
                 self._sample_key,
             ) = self.update_models(
                 models=(self.model[POLICY], self.model[V]),
                 temperature=self.model[TEMPERATURE],
                 opt=(self.opt[POLICY], self.opt[V]),
                 opt_state=(self.opt_state[POLICY], self.opt_state[V]),
-                obss=obss,
-                h_states=h_states,
-                acts=acts,
-                rews=rews,
-                dones=dones,
-                next_obss=next_obss,
-                next_h_states=next_h_states,
+                obss=obss.reshape(*sample_mask.shape, -1),
+                h_states=h_states.reshape(*sample_mask.shape, -1),
+                acts=acts.reshape(*sample_mask.shape, -1),
+                rews=rews.reshape(*sample_mask.shape, -1),
+                mask=sample_mask
             )
 
             self._model[POLICY], self._model[V] = models
@@ -298,8 +253,8 @@ class PCL(Learner):
                     temperature=self.model[TEMPERATURE],
                     opt=self.opt[TEMPERATURE],
                     opt_state=self.opt_state[TEMPERATURE],
-                    obss=obss,
-                    h_states=h_states,
+                    obss=obss[flattened_sample_mask],
+                    h_states=h_states[flattened_sample_mask],
                 )
                 self._model[TEMPERATURE] = temperature
                 self._opt_state[TEMPERATURE] = opt_state
@@ -322,39 +277,28 @@ class PCL(Learner):
                     f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob"
                 ] = temperature_learn_info["mean_temperature_log_prob"]
 
-            learn_info[f"{w.LOSSES}/{MEAN_Q_LOSS}"] += (
-                q_learn_info[Q_LOSS].item() / self._num_gradient_steps
+            learn_info[f"{w.LOSSES}/{MEAN_PC_LOSS}"] += (
+                pc_learn_info[PC_LOSS].item() / self._num_gradient_steps
             )
 
             learn_info[f"{w.Q_VALUES}/{MEAN_CURR_Q}"] += (
-                q_learn_info[MEAN_CURR_Q].item() / self._num_gradient_steps
-            )
-            learn_info[f"{w.Q_VALUES}/{MEAN_NEXT_Q}"] += (
-                q_learn_info[MEAN_NEXT_Q].item() / self._num_gradient_steps
+                pc_learn_info[MEAN_CURR_Q].item() / self._num_gradient_steps
             )
             learn_info[f"{w.Q_VALUES}/{MAX_CURR_Q}"] = max(
                 learn_info[f"{w.Q_VALUES}/{MAX_CURR_Q}"],
-                q_learn_info[MAX_CURR_Q].item(),
-            )
-            learn_info[f"{w.Q_VALUES}/{MAX_NEXT_Q}"] = max(
-                learn_info[f"{w.Q_VALUES}/{MAX_NEXT_Q}"],
-                q_learn_info[MAX_NEXT_Q].item(),
+                pc_learn_info[MAX_CURR_Q].item(),
             )
             learn_info[f"{w.Q_VALUES}/{MIN_CURR_Q}"] = min(
                 learn_info[f"{w.Q_VALUES}/{MIN_CURR_Q}"],
-                q_learn_info[MIN_CURR_Q].item(),
-            )
-            learn_info[f"{w.Q_VALUES}/{MIN_NEXT_Q}"] = min(
-                learn_info[f"{w.Q_VALUES}/{MIN_NEXT_Q}"],
-                q_learn_info[MIN_NEXT_Q].item(),
+                pc_learn_info[MIN_CURR_Q].item(),
             )
 
-            learn_info[f"{w.ACTION_LOG_PROBS}/max_q_log_prob"] = q_learn_info[
+            learn_info[f"{w.ACTION_LOG_PROBS}/max_q_log_prob"] = pc_learn_info[
                 "max_q_log_prob"
             ]
-            learn_info[f"{w.ACTION_LOG_PROBS}/min_q_log_prob"] = q_learn_info[
+            learn_info[f"{w.ACTION_LOG_PROBS}/min_q_log_prob"] = pc_learn_info[
                 "min_q_log_prob"
             ]
-            learn_info[f"{w.ACTION_LOG_PROBS}/mean_q_log_prob"] = q_learn_info[
+            learn_info[f"{w.ACTION_LOG_PROBS}/mean_q_log_prob"] = pc_learn_info[
                 "mean_q_log_prob"
             ]
