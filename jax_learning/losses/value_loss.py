@@ -18,7 +18,7 @@ def n_step_bootstrapped_returns(
     gamma: float,
     lambd: float = 1.0,
 ) -> np.ndarray:
-    rets = jnp.zeros(v_preds.shape)
+    rets = np.zeros(v_preds.shape)
     for step in reversed(range(len(rews) - 1)):
         rets.at[step].set((
             (1 - lambd) * v_preds[step + 1] + lambd * rets[step + 1]
@@ -56,10 +56,13 @@ def path_consistency_error(
     lprobs: np.ndarray,
     v_preds: np.ndarray,
     rews: np.ndarray,
-    dones: np.ndarray,
+    length: np.ndarray,
     temp: np.ndarray,
     gamma: float,
 ) -> np.ndarray:
     ent_reg_rews = rews - temp * lprobs
-    targets = n_step_bootstrapped_returns(v_preds, ent_reg_rews, dones, gamma)
-    return v_preds[0] - targets[0]
+    target = 0
+    disc_rews = ent_reg_rews * (gamma ** np.arange(len(ent_reg_rews)))
+    target = jnp.where(jnp.arange(disc_rews.shape[0]) <= length, disc_rews, 0).sum()
+    target += (gamma ** length) * v_preds[length]
+    return v_preds[0] - target

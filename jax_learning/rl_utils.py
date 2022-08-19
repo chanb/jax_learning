@@ -68,6 +68,12 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         render()
         agent.store(obs, h_state, act, rew, done, info, next_obs, next_h_state)
         agent.learn(next_obs, next_h_state, timestep_dict)
+
+        if (timestep_i + 1) % log_interval == 0:
+            print("Epoch {} ".format((timestep_i + 1) // log_interval) + "=" * 50)
+            print("Current return (episode: {}, is finished: {}) with length {}: {}".format(ep_i, done, ep_len, ep_return))
+            print(agent.model["policy"].dist_params(obs, h_state))
+
         obs = next_obs
         ep_return += rew
         ep_len += 1
@@ -132,3 +138,6 @@ def evaluate(env: Any, agent: Agent, cfg: Namespace, timestep_dict: dict):
                 ep_lengths.append(ep_length)
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODIC_RETURN}"] = np.mean(ep_returns)
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}"] = np.mean(ep_lengths)
+
+    print("Evaluation:")
+    print("Mean return: {}, Mean length: {}".format(np.mean(ep_returns), np.mean(ep_lengths)))

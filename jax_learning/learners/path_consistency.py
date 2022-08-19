@@ -66,7 +66,7 @@ class PCL(ReinforcementLearner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            done_mask: np.ndarray,
+            lengths: np.ndarray,
             keys: Sequence[jrandom.PRNGKey],
         ) -> Tuple[np.ndarray, dict]:
             (policy, v) = models
@@ -74,11 +74,11 @@ class PCL(ReinforcementLearner):
             lprobs, _ = jax.vmap(jax.vmap(policy.lprob))(
                 obss, h_states, acts
             )
-            lprobs = jnp.sum(lprobs, axis=-1, keepdims=True)
+            lprobs = jnp.sum(lprobs, axis=-1)
 
             temp = temperature()
 
-            pcl_errors = _path_consistency_error(lprobs, v_preds, rews, done_mask[..., None], temp, self._gamma)
+            pcl_errors = _path_consistency_error(lprobs, v_preds, rews[..., 0], lengths, temp, self._gamma)
             loss = jnp.sum(jnp.mean(pcl_errors**2, axis=0))
             return loss, {
                 PC_LOSS: loss,
@@ -96,7 +96,7 @@ class PCL(ReinforcementLearner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            done_mask: np.ndarray,
+            lengths: np.ndarray,
         ) -> Tuple[
             StochasticPolicy,
             Value,
@@ -118,7 +118,7 @@ class PCL(ReinforcementLearner):
                 h_states,
                 acts,
                 rews,
-                done_mask,
+                lengths,
                 keys,
             )
             (policy_grads, v_grads) = grads
@@ -199,7 +199,7 @@ class PCL(ReinforcementLearner):
                 h_states,
                 acts,
                 rews,
-                _,
+                dones,
                 _,
                 lengths,
                 sample_idxes,
@@ -211,13 +211,12 @@ class PCL(ReinforcementLearner):
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
 
-            done_mask = sample_idxes == -1
-            done_mask[np.arange(self._batch_size), lengths - 1] = True
-            (obss, h_states, acts, rews, done_mask) = to_jnp(
+            (obss, h_states, acts, rews, dones, lengths) = to_jnp(
                 *batch_flatten(
-                    obss, h_states, acts, rews
-                ), done_mask
+                    obss, h_states, acts, rews, dones, lengths
+                )
             )
+
             (
                 policy,
                 v,
@@ -234,12 +233,14 @@ class PCL(ReinforcementLearner):
                 v_opt=self.opt[V],
                 policy_opt_state=self.opt_state[POLICY],
                 v_opt_state=self.opt_state[V],
-                obss=obss.reshape(*done_mask.shape, -1),
-                h_states=h_states.reshape(*done_mask.shape, -1),
-                acts=acts.reshape(*done_mask.shape, -1),
-                rews=rews.reshape(*done_mask.shape, -1),
-                done_mask=done_mask,
+                obss=obss.reshape(*sample_idxes.shape, -1),
+                h_states=h_states.reshape(*sample_idxes.shape, -1),
+                acts=acts.reshape(*sample_idxes.shape, -1),
+                rews=rews.reshape(*sample_idxes.shape, -1),
+                lengths=lengths,
             )
+            # from IPython.core.debugger import set_trace
+            # set_trace()
 
             self._model[POLICY], self._model[V] = policy, v
             self._opt_state[POLICY], self._opt_state[V] = policy_opt_state, v_opt_state
