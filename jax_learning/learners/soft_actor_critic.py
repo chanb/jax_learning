@@ -11,7 +11,7 @@ from typing import Sequence, Tuple, Dict
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import batch_flatten, to_jnp
 from jax_learning.common import polyak_average_generator
-from jax_learning.learners import LearnerWithTargetNetwork
+from jax_learning.learners import ReinforcementLearnerWithTargetNetwork
 from jax_learning.losses.policy_loss import sac_policy_loss
 from jax_learning.losses.temperature_loss import sac_temperature_loss
 from jax_learning.losses.value_loss import clipped_min_q_td_error
@@ -41,7 +41,7 @@ TARGET_ENTROPY = "target_entropy"
 OMEGA = "omega"
 
 
-class SAC(LearnerWithTargetNetwork):
+class SAC(ReinforcementLearnerWithTargetNetwork):
     def __init__(
         self,
         model: Dict[str, eqx.Module],

@@ -10,7 +10,7 @@ import optax
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
 from jax_learning.common import polyak_average_generator
-from jax_learning.learners import LearnerWithTargetNetwork
+from jax_learning.learners import ReinforcementLearnerWithTargetNetwork
 from jax_learning.losses.value_loss import q_learning_td_error
 from jax_learning.models import ActionValue
 
@@ -30,7 +30,7 @@ Q = "q"
 OMEGA = "omega"
 
 
-class QLearning(LearnerWithTargetNetwork):
+class QLearning(ReinforcementLearnerWithTargetNetwork):
     def __init__(
         self,
         model: Dict[str, eqx.Module],

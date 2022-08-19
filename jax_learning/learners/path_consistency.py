@@ -10,7 +10,7 @@ from typing import Sequence, Tuple, Dict
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import batch_flatten, to_jnp
-from jax_learning.learners import Learner
+from jax_learning.learners import ReinforcementLearner
 from jax_learning.losses.temperature_loss import sac_temperature_loss
 from jax_learning.losses.value_loss import path_consistency_error
 from jax_learning.models import StochasticPolicy, Value, Temperature
@@ -34,7 +34,7 @@ TARGET_ENTROPY = "target_entropy"
 OMEGA = "omega"
 
 
-class PCL(Learner):
+class PCL(ReinforcementLearner):
     def __init__(
         self,
         model: Dict[str, eqx.Module],
@@ -48,10 +48,11 @@ class PCL(Learner):
         self._num_gradient_steps = cfg.num_gradient_steps
 
         self._buffer_warmup = cfg.buffer_warmup
-        self._actor_update_frequency = cfg.actor_update_frequency
 
         self._target_entropy = getattr(cfg, TARGET_ENTROPY, None)
         self._sample_key = jrandom.PRNGKey(cfg.seed)
+
+        self._horizon_length = 5
 
         _path_consistency_error = jax.vmap(
             path_consistency_error, in_axes=[0, 0, 0, 0, None, None]
@@ -69,15 +70,15 @@ class PCL(Learner):
             keys: Sequence[jrandom.PRNGKey],
         ) -> Tuple[np.ndarray, dict]:
             (policy, v) = models
-            v_preds, _ = jax.vmap(v.values)(obss, h_states)
-
-            lprobs, _ = jax.vmap(policy.lprob)(
+            v_preds, _ = jax.vmap(jax.vmap(v.values))(obss, h_states)
+            lprobs, _ = jax.vmap(jax.vmap(policy.lprob))(
                 obss, h_states, acts
             )
+            lprobs = jnp.sum(lprobs, axis=-1, keepdims=True)
 
             temp = temperature()
 
-            pcl_errors = _path_consistency_error(lprobs, v_preds, rews, done_mask, temp, self._gamma)
+            pcl_errors = _path_consistency_error(lprobs, v_preds, rews, done_mask[..., None], temp, self._gamma)
             loss = jnp.sum(jnp.mean(pcl_errors**2, axis=0))
             return loss, {
                 PC_LOSS: loss,
@@ -198,27 +199,25 @@ class PCL(Learner):
                 h_states,
                 acts,
                 rews,
-                dones,
+                _,
                 _,
                 lengths,
                 sample_idxes,
             ) = self.buffer.sample(
                 batch_size=self._batch_size,
-                next_obs=next_obs,
-                next_h_state=next_h_state,
+                horizon_length=self._horizon_length,
             )
 
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
 
-            (obss, h_states, acts, rews, dones) = to_jnp(
-                *batch_flatten(
-                    obss, h_states, acts, rews, dones
-                )
-            )
-
             done_mask = sample_idxes == -1
-            done_mask[np.arange(len(sample_idxes)), lengths - 1] = True
+            done_mask[np.arange(self._batch_size), lengths - 1] = True
+            (obss, h_states, acts, rews, done_mask) = to_jnp(
+                *batch_flatten(
+                    obss, h_states, acts, rews
+                ), done_mask
+            )
             (
                 policy,
                 v,
@@ -231,14 +230,14 @@ class PCL(Learner):
                 policy=self.model[POLICY],
                 v=self.model[V],
                 temperature=self.model[TEMPERATURE],
-                policy_opt=self.opt[V],
-                v_opt=self.opt[POLICY],
+                policy_opt=self.opt[POLICY],
+                v_opt=self.opt[V],
                 policy_opt_state=self.opt_state[POLICY],
                 v_opt_state=self.opt_state[V],
-                obss=obss,
-                h_states=h_states,
-                acts=acts,
-                rews=rews,
+                obss=obss.reshape(*done_mask.shape, -1),
+                h_states=h_states.reshape(*done_mask.shape, -1),
+                acts=acts.reshape(*done_mask.shape, -1),
+                rews=rews.reshape(*done_mask.shape, -1),
                 done_mask=done_mask,
             )
 
