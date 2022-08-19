@@ -769,6 +769,6 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             1 - sample_mask
         )
         infos[c.EPISODE_IDXES] = episode_idxes
-        lengths = np.sum(sample_mask, axis=-1)
+        lengths = np.sum(sample_mask, axis=-1).astype(np.int64)
 
         return obss, h_states, acts, rews, dones, infos, lengths, sample_idxes

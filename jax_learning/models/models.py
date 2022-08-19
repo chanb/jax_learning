@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Tuple, Sequence, Callable, Any
+from typing import Tuple, Sequence, Callable, Any, Optional
 
 import equinox as eqx
 import jax
@@ -58,6 +58,14 @@ class StochasticPolicy(Policy):
 class ActionValue(Model):
     @abstractmethod
     def q_values(
+        self, x: np.ndarray, h_state: np.ndarray, act: Optional[np.ndarray] = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        pass
+
+
+class Value(Model):
+    @abstractmethod
+    def values(
         self, x: np.ndarray, h_state: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         pass
