@@ -71,14 +71,14 @@ class PCL(ReinforcementLearner):
         ) -> Tuple[np.ndarray, dict]:
             (policy, v) = models
             v_preds, _ = jax.vmap(jax.vmap(v.values))(obss, h_states)
-            lprobs, _ = jax.vmap(jax.vmap(policy.lprob))(
-                obss, h_states, acts
-            )
+            lprobs, _ = jax.vmap(jax.vmap(policy.lprob))(obss, h_states, acts)
             lprobs = jnp.sum(lprobs, axis=-1)
 
             temp = temperature()
 
-            pcl_errors = _path_consistency_error(lprobs, v_preds, rews[..., 0], lengths, temp, self._gamma)
+            pcl_errors = _path_consistency_error(
+                lprobs, v_preds, rews[..., 0], lengths, temp, self._gamma
+            )
             loss = jnp.sum(jnp.mean(pcl_errors**2, axis=0))
             return loss, {
                 PC_LOSS: loss,
@@ -123,7 +123,9 @@ class PCL(ReinforcementLearner):
             )
             (policy_grads, v_grads) = grads
 
-            policy_updates, policy_opt_state = policy_opt.update(policy_grads, policy_opt_state)
+            policy_updates, policy_opt_state = policy_opt.update(
+                policy_grads, policy_opt_state
+            )
             policy = eqx.apply_updates(policy, policy_updates)
 
             v_updates, v_opt_state = v_opt.update(v_grads, v_opt_state)
@@ -139,6 +141,7 @@ class PCL(ReinforcementLearner):
             )
 
         _sac_temperature_loss = jax.vmap(sac_temperature_loss, in_axes=[None, 0, None])
+
         @eqx.filter_grad(has_aux=True)
         def temperature_loss(
             temperature: Temperature,
@@ -212,9 +215,7 @@ class PCL(ReinforcementLearner):
                 obss = self.obs_rms.normalize(obss)
 
             (obss, h_states, acts, rews, dones, lengths) = to_jnp(
-                *batch_flatten(
-                    obss, h_states, acts, rews, dones, lengths
-                )
+                *batch_flatten(obss, h_states, acts, rews, dones, lengths)
             )
 
             (
@@ -239,8 +240,6 @@ class PCL(ReinforcementLearner):
                 rews=rews.reshape(*sample_idxes.shape, -1),
                 lengths=lengths,
             )
-            # from IPython.core.debugger import set_trace
-            # set_trace()
 
             self._model[POLICY], self._model[V] = policy, v
             self._opt_state[POLICY], self._opt_state[V] = policy_opt_state, v_opt_state

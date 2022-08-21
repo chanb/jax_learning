@@ -735,7 +735,8 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
 
         if idxes is None:
             episode_idxes = self.rng.randint(
-                len(self._episode_lengths) - int(self._episode_lengths[-1] == 0), size=batch_size
+                len(self._episode_lengths) - int(self._episode_lengths[-1] == 0),
+                size=batch_size,
             )
         else:
             episode_idxes = idxes

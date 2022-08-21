@@ -23,7 +23,9 @@ class MLPValue(Value):
     ):
         self.in_dim = int(np.product(in_dim))
         self.out_dim = int(np.product(out_dim))
-        self.value_function = MLP(self.in_dim, self.out_dim, hidden_dim, num_hidden, key)
+        self.value_function = MLP(
+            self.in_dim, self.out_dim, hidden_dim, num_hidden, key
+        )
 
     def values(
         self, obs: np.ndarray, h_state: np.ndarray

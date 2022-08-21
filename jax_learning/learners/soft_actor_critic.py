@@ -214,7 +214,11 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
             h_states: np.ndarray,
             acts: np.ndarray,
         ) -> Tuple[
-            StochasticPolicy, optax.OptState, jax.tree_util.PyTreeDef, dict, jrandom.PRNGKey
+            StochasticPolicy,
+            optax.OptState,
+            jax.tree_util.PyTreeDef,
+            dict,
+            jrandom.PRNGKey,
         ]:
             sample_key = jrandom.split(self._sample_key, num=1)[0]
             keys = jrandom.split(self._sample_key, num=self._batch_size)

@@ -29,14 +29,18 @@ class Categorical(Distribution):
     ) -> np.ndarray:
         if num_samples:
             shape = (num_samples, *logits.shape[-1])
+            return jrandom.categorical(
+                key=key, logits=logits, shape=shape, axis=-1
+            ).astype(int)
         else:
-            shape = logits.shape[-1]
-        return jrandom.categorical(key=key, logits=logits, shape=shape, axis=-1)
+            return jrandom.categorical(key=key, logits=logits, axis=-1).astype(int)
 
     @eqx.filter_jit
     @staticmethod
     def lprob(logits: np.ndarray, x: np.ndarray) -> np.ndarray:
-        return logits[x] - jax.scipy.special.logsumexp(logits, axis=-1, keepdims=True)
+        return logits[x.astype(int)] - jax.scipy.special.logsumexp(
+            logits, axis=-1, keepdims=True
+        )
 
 
 class Normal(Distribution):
