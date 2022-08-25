@@ -67,5 +67,5 @@ def path_consistency_error(
     target = 0
     disc_rews = ent_reg_rews * (gamma ** np.arange(len(ent_reg_rews)))
     target = jnp.where(jnp.arange(disc_rews.shape[0]) < length, disc_rews, 0).sum()
-    target += (gamma**length) * v_preds[length]
-    return v_preds[0] - target
+    target += (length == len(ent_reg_rews)) * (gamma**length) * v_preds[length]
+    return v_preds[0] - target[0]

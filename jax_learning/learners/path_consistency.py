@@ -32,6 +32,7 @@ TEMPERATURE = "temperature"
 MEAN_TEMPERATURE = "mean_temperature"
 TARGET_ENTROPY = "target_entropy"
 OMEGA = "omega"
+HORIZON_LENGTH = "horizon_length"
 
 
 class PCL(ReinforcementLearner):
@@ -52,7 +53,7 @@ class PCL(ReinforcementLearner):
         self._target_entropy = getattr(cfg, TARGET_ENTROPY, None)
         self._sample_key = jrandom.PRNGKey(cfg.seed)
 
-        self._horizon_length = 5
+        self._horizon_length = getattr(cfg, HORIZON_LENGTH, 1) + 1
 
         _path_consistency_error = jax.vmap(
             path_consistency_error, in_axes=[0, 0, 0, 0, None, None]

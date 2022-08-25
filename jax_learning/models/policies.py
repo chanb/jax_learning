@@ -32,21 +32,21 @@ class MLPSoftmaxPolicy(StochasticPolicy):
         self, obs: np.ndarray, h_state: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         logits = self.dist_params(obs, h_state)
-        return jnp.argmax(logits, axis=-1).astype(int), h_state
+        return jnp.argmax(logits, axis=-1), h_state
 
     def random_action(
         self, obs: np.ndarray, h_state: np.ndarray, key: jrandom.PRNGKey
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         logits = self.dist_params(obs, h_state)
         act = Categorical.sample(logits, key)
-        return act.astype(int), h_state
+        return act, h_state
 
     def act_lprob(
         self, obs: np.ndarray, h_state: np.ndarray, key: jrandom.PRNGKey
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         logits = self.dist_params(obs, h_state)
         act = Categorical.sample(logits, key)
-        lprob = Categorical.lprob(logits, act.astype(int))
+        lprob = Categorical.lprob(logits, act)
         return act, lprob, h_state
 
     def dist_params(self, obs: np.ndarray, h_state: np.ndarray) -> Sequence[np.ndarray]:
@@ -56,7 +56,7 @@ class MLPSoftmaxPolicy(StochasticPolicy):
         self, obs: np.ndarray, h_state: np.ndarray, act: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         logits = self.dist_params(obs, h_state)
-        lprob = Categorical.lprob(logits, act.astype(int))
+        lprob = Categorical.lprob(logits, act)
         return lprob, h_state
 
 
