@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import sys
 import timeit
@@ -38,6 +39,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     render = env.render if cfg.render else lambda: None
     env_rng = cfg.env_rng
     evaluation_frequency = cfg.evaluation_frequency
+    evaluation_env = copy.deepcopy(env)
 
     random_exploration = getattr(cfg, c.RANDOM_EXPLORATION, None)
     num_exploration = getattr(cfg, c.EXPLORATION_STEPS, 0)
@@ -93,7 +95,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
             ep_i += 1
 
         if evaluation_frequency and (timestep_i + 1) % evaluation_frequency == 0:
-            evaluate(env, agent, cfg.evaluation_cfg, timestep_dict)
+            evaluate(evaluation_env, agent, cfg.evaluation_cfg, timestep_dict)
 
         metrics_batch.append(timestep_dict)
         if (timestep_i + 1) % log_interval == 0:

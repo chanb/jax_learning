@@ -746,30 +746,26 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         episode_start_idxes = np.array(self._episode_start_idxes)
         batch_episode_lengths = episode_lengths[episode_idxes]
 
-        valid_starts = np.clip(
-            batch_episode_lengths - horizon_length + 1, a_min=1, a_max=np.inf
-        )
         sample_lengths = np.tile(np.arange(horizon_length), (batch_size, 1))
-        batch_lengths = np.clip(
-            horizon_length - batch_episode_lengths, a_min=0, a_max=horizon_length
-        )
-        sample_mask = np.flip(
-            np.cumsum(np.eye(horizon_length)[batch_lengths], axis=-1), axis=-1
-        )
-
+        subtraj_start_idxes = self.rng.randint(batch_episode_lengths)
         sample_idxes = (
-            (self.rng.randint(valid_starts) + episode_start_idxes[episode_idxes])[
-                :, None
-            ]
+            (subtraj_start_idxes + episode_start_idxes[episode_idxes])[:, None]
             + sample_lengths
         ) % self._buffer_size
         obss, h_states, acts, rews, dones, infos, _ = self.get_transitions(
             sample_idxes.reshape(-1)
         )
+
+        lengths = np.clip(
+            batch_episode_lengths - subtraj_start_idxes, a_min=0, a_max=horizon_length
+        ).astype(np.int64)
+        sample_mask = np.flip(
+            np.cumsum(np.eye(horizon_length)[horizon_length - lengths], axis=-1),
+            axis=-1,
+        )
         sample_idxes = sample_idxes * sample_mask - np.ones(sample_idxes.shape) * (
             1 - sample_mask
         )
         infos[c.EPISODE_IDXES] = episode_idxes
-        lengths = np.sum(sample_mask, axis=-1).astype(np.int64)
 
         return obss, h_states, acts, rews, dones, infos, lengths, sample_idxes
