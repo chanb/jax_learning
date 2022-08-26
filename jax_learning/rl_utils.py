@@ -58,7 +58,12 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     tic = timeit.default_timer()
     for timestep_i in range(max_timesteps):
         timestep_dict = {f"{w.TRAIN}/{w.TIMESTEP}": timestep_i}
-        act, next_h_state = agent.compute_action(obs, h_state, timestep_dict)
+
+        # TODO: Implement a nicer way to do this... just testing PCL with different exploration.
+        if np.random.rand() < 0.5:
+            act, next_h_state = agent.deterministic_action(obs, h_state, timestep_dict)
+        else:
+            act, next_h_state = agent.compute_action(obs, h_state, timestep_dict)
 
         if timestep_i < num_exploration:
             act = random_exploration()
@@ -78,7 +83,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
                     ep_i, done, ep_len, ep_return
                 )
             )
-            print(agent.model["policy"].dist_params(obs, h_state))
+            print(agent.model[agent.model_key].dist_params(obs, h_state))
 
         obs = next_obs
         ep_return += rew

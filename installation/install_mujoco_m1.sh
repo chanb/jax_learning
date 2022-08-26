@@ -13,5 +13,5 @@ ln -sf /opt/homebrew/lib/libglfw.3.dylib $HOME/.mujoco/mujoco210/bin
 # which python
 # exit
 
-export CC=/opt/homebrew/bin/gcc-11         # see https://github.com/openai/mujoco-py/issues/605
+export CC=/opt/homebrew/bin/gcc-12         # see https://github.com/openai/mujoco-py/issues/605
 pip install mujoco-py && python -c 'import mujoco_py'

@@ -55,22 +55,31 @@ class SoftmaxQ(StochasticPolicy, ActionValue):
         self, obs: np.ndarray, h_state: np.ndarray, key: jrandom.PRNGKey
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         q_val, h_state = self.q_values(obs, h_state)
-        act = Categorical(q_val).sample(key)
+        act = Categorical.sample(q_val, key)
         return act, h_state
 
     def act_lprob(
         self, obs: np.ndarray, h_state: np.ndarray, key: jrandom.PRNGKey
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         q_val, h_state = self.q_values(obs, h_state)
-        dist = Categorical(q_val)
-        act = dist.sample(key)
-        lprob = dist.lprob
+        act = Categorical.sample(q_val, key)
+        lprob = Categorical.lprob(q_val, act)
         return act, lprob, h_state
 
     def q_values(
         self, obs: np.ndarray, h_state: np.ndarray, act: Optional[np.ndarray] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
         return self.q_function.q_values(obs, h_state, act)
+
+    def dist_params(self, obs: np.ndarray, h_state: np.ndarray) -> Sequence[np.ndarray]:
+        return self.q_function.q_values(obs, h_state)[0]
+
+    def lprob(
+        self, obs: np.ndarray, h_state: np.ndarray, act: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        q_val, h_state = self.q_values(obs, h_state)
+        lprob = Categorical.lprob(q_val, act)
+        return lprob, h_state
 
 
 class MLPQ(ActionValue):
