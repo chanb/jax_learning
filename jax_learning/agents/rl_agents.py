@@ -102,10 +102,10 @@ class EpsilonGreedyAgent(RLAgent):
             obs, h_state, curr_key
         )
         if jrandom.bernoulli(key=curr_key, p=self._eps):
-            sign = (-1) ** jrandom.randint(curr_key, shape=(self._action_dim,), minval=0, min_val=2)
+            sign = (-1) ** jrandom.randint(curr_key, shape=(self._action_dim,), minval=0, maxval=2)
             action = sign * jrandom.uniform(
                 curr_key, shape=(self._action_dim,), minval=0, maxval=1
-            ).item() * self._action_scale + self._action_midpoint
+            ) * self._action_scale + self._action_midpoint
             info[EXPLORATION_STRATEGY] = 0
         else:
             info[EXPLORATION_STRATEGY] = 1
