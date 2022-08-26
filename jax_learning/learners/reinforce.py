@@ -83,7 +83,7 @@ class REINFORCE(ReinforcementLearner):
         if self._step % self._update_frequency != 0:
             return
 
-        obss, h_states, acts, rews, dones, _, _, _ = self.buffer.sample(
+        obss, h_states, acts, rews, dones, _, _, _, _, _ = self.buffer.sample(
             batch_size=self._update_frequency, idxes=self._sample_idxes
         )
         if self.obs_rms:
