@@ -174,7 +174,7 @@ class PCL(ReinforcementLearner):
             Temperature, optax.OptState, jax.tree_util.PyTreeDef, dict, jrandom.PRNGKey
         ]:
             sample_key = jrandom.split(self._sample_key, num=1)[0]
-            keys = jrandom.split(self._sample_key, num=self._batch_size)
+            keys = jrandom.split(self._sample_key, num=len(obss))
             grads, learn_info = temperature_loss(
                 temperature, policy, obss, h_states, keys
             )
@@ -246,11 +246,11 @@ class PCL(ReinforcementLearner):
             self._opt_state[POLICY], self._opt_state[V] = policy_opt_state, v_opt_state
 
             if self._target_entropy is not None:
-                learn_info(f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}", 0.0)
-                learn_info(f"{w.TRAIN}/{MEAN_TEMPERATURE}", 0.0)
-                learn_info(f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0)
-                learn_info(f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0)
-                learn_info(f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0)
+                learn_info.setdefault(f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}", 0.0)
+                learn_info.setdefault(f"{w.TRAIN}/{MEAN_TEMPERATURE}", 0.0)
+                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0)
+                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0)
+                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0)
                 flattened_sample_mask = np.where(sample_idxes.flatten() != -1)
                 (
                     temperature,

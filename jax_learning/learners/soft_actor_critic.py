@@ -380,11 +380,11 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
                 ] = policy_learn_info["mean_policy_log_prob"]
 
                 if self._target_entropy is not None:
-                    learn_info(f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}", 0.0)
-                    learn_info(f"{w.TRAIN}/{MEAN_TEMPERATURE}", 0.0)
-                    learn_info(f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0)
-                    learn_info(f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0)
-                    learn_info(f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0)
+                    learn_info.setdefault(f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}", 0.0)
+                    learn_info.setdefault(f"{w.TRAIN}/{MEAN_TEMPERATURE}", 0.0)
+                    learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0)
+                    learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0)
+                    learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0)
                     (
                         temperature,
                         opt_state,

@@ -98,8 +98,8 @@ class EpsilonGreedyAgent(RLAgent):
     ) -> Tuple[np.ndarray, np.ndarray]:
         obs = self._obs_rms.normalize(obs) if self._obs_rms else obs
         new_key, curr_key = jrandom.split(self._key)
-        action, next_h_state = self.model[self._model_key].random_action(
-            obs, h_state, curr_key
+        action, next_h_state = self.model[self._model_key].deterministic_action(
+            obs, h_state
         )
         if jrandom.bernoulli(key=curr_key, p=self._eps):
             sign = (-1) ** jrandom.randint(curr_key, shape=(self._action_dim,), minval=0, maxval=2)
