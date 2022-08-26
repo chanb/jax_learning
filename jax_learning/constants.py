@@ -3,6 +3,8 @@ ACTIONS = "actions"
 HIDDEN_STATES = "hidden_states"
 REWARDS = "rewards"
 DONES = "dones"
+TERMINATEDS = "terminateds"
+TRUNCATEDS = "truncateds"
 INFOS = "infos"
 
 BUFFER_SIZE = "buffer_size"

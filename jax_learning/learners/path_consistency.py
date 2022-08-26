@@ -203,7 +203,9 @@ class PCL(ReinforcementLearner):
                 h_states,
                 acts,
                 rews,
-                dones,
+                _,
+                terminateds,
+                _,
                 _,
                 lengths,
                 sample_idxes,
@@ -215,8 +217,8 @@ class PCL(ReinforcementLearner):
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
 
-            (obss, h_states, acts, rews, dones, lengths) = to_jnp(
-                *batch_flatten(obss, h_states, acts, rews, dones, lengths)
+            (obss, h_states, acts, rews, terminateds, lengths) = to_jnp(
+                *batch_flatten(obss, h_states, acts, rews, terminateds, lengths)
             )
 
             (

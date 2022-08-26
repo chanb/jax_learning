@@ -1,3 +1,4 @@
+from math import trunc
 from typing import Iterable, Optional, Tuple
 
 import _pickle as pickle
@@ -39,6 +40,8 @@ class NumPyBuffer(ReplayBuffer):
         self.actions = np.zeros(shape=(buffer_size, *act_dim), dtype=np.float32)
         self.rewards = np.zeros(shape=(buffer_size, *rew_dim), dtype=np.float32)
         self.dones = np.zeros(shape=(buffer_size, 1), dtype=np.float32)
+        self.terminateds = np.zeros(shape=(buffer_size, 1), dtype=np.float32)
+        self.truncateds = np.zeros(shape=(buffer_size, 1), dtype=np.float32)
         self.infos = dict()
         for info_name, (info_shape, info_dtype) in infos.items():
             self.infos[info_name] = np.zeros(
@@ -101,6 +104,8 @@ class NumPyBuffer(ReplayBuffer):
             self.actions[index],
             self.rewards[index],
             self.dones[index],
+            self.terminateds[index],
+            self.truncateds[index],
             {
                 info_name: info_value[index]
                 for info_name, info_value in self.infos.items()
@@ -140,6 +145,8 @@ class NumPyBuffer(ReplayBuffer):
                     c.ACTIONS: self.actions[transitions_to_save],
                     c.REWARDS: self.rewards[transitions_to_save],
                     c.DONES: self.dones[transitions_to_save],
+                    c.TERMINATEDS: self.terminateds[transitions_to_save],
+                    c.TRUNCATEDS: self.truncateds[transitions_to_save],
                     c.INFOS: {
                         info_name: info_value[transitions_to_save]
                         for info_name, info_value in self.infos.items()
@@ -157,7 +164,8 @@ class NumPyBuffer(ReplayBuffer):
         h_state: np.ndarray,
         act: np.ndarray,
         rew: float,
-        done: bool,
+        terminated: bool,
+        truncated: bool,
         info: dict,
         **kwargs,
     ) -> bool:
@@ -177,7 +185,9 @@ class NumPyBuffer(ReplayBuffer):
         self.hidden_states[self._pointer] = h_state
         self.actions[self._pointer] = act
         self.rewards[self._pointer] = rew
-        self.dones[self._pointer] = done
+        self.dones[self._pointer] = np.logical_or(terminated, truncated)
+        self.terminateds[self._pointer] = terminated
+        self.truncateds[self._pointer] = truncated
         self._checkpoint_idxes[self._pointer] = 0
         for info_name, info_value in info.items():
             if info_name not in self.infos:
@@ -276,13 +286,23 @@ class NumPyBuffer(ReplayBuffer):
     def get_transitions(
         self, idxes: np.ndarray
     ) -> Tuple[
-        np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict, np.ndarray
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        dict,
+        np.ndarray,
     ]:
         obss = self.observations[idxes]
         h_states = self.hidden_states[idxes]
         acts = self.actions[idxes]
         rews = self.rewards[idxes]
         dones = self.dones[idxes]
+        terminateds = self.terminateds[idxes]
+        truncateds = self.truncateds[idxes]
         infos = {
             info_name: info_value[idxes] for info_name, info_value in self.infos.items()
         }
@@ -318,7 +338,17 @@ class NumPyBuffer(ReplayBuffer):
             obss = obss[:, None, ...]
             h_states = h_states[:, None, ...]
 
-        return obss, h_states, acts, rews, dones, infos, lengths
+        return (
+            obss,
+            h_states,
+            acts,
+            rews,
+            dones,
+            terminateds,
+            truncateds,
+            infos,
+            lengths,
+        )
 
     def get_next(
         self, next_idxes: np.ndarray, next_obs: np.ndarray, next_h_state: np.ndarray
@@ -344,6 +374,8 @@ class NumPyBuffer(ReplayBuffer):
         np.ndarray,
         np.ndarray,
         np.ndarray,
+        np.ndarray,
+        np.ndarray,
         dict,
         np.ndarray,
         np.ndarray,
@@ -356,11 +388,30 @@ class NumPyBuffer(ReplayBuffer):
         else:
             random_idxes = idxes
 
-        obss, h_states, acts, rews, dones, infos, lengths = self.get_transitions(
-            random_idxes
-        )
+        (
+            obss,
+            h_states,
+            acts,
+            rews,
+            dones,
+            terminateds,
+            truncateds,
+            infos,
+            lengths,
+        ) = self.get_transitions(random_idxes)
 
-        return obss, h_states, acts, rews, dones, infos, lengths, random_idxes
+        return (
+            obss,
+            h_states,
+            acts,
+            rews,
+            dones,
+            terminateds,
+            truncateds,
+            infos,
+            lengths,
+            random_idxes,
+        )
 
     def sample_with_next_obs(
         self,
@@ -370,6 +421,7 @@ class NumPyBuffer(ReplayBuffer):
         idxes: Optional[np.ndarray] = None,
         **kwargs,
     ) -> Tuple[
+        np.ndarray,
         np.ndarray,
         np.ndarray,
         np.ndarray,
@@ -387,6 +439,8 @@ class NumPyBuffer(ReplayBuffer):
             acts,
             rews,
             dones,
+            terminateds,
+            truncateds,
             infos,
             lengths,
             random_idxes,
@@ -403,6 +457,8 @@ class NumPyBuffer(ReplayBuffer):
             acts,
             rews,
             dones,
+            terminateds,
+            truncateds,
             next_obss,
             next_h_states,
             infos,
@@ -452,6 +508,8 @@ class NumPyBuffer(ReplayBuffer):
                     c.ACTIONS: self.actions,
                     c.REWARDS: self.rewards,
                     c.DONES: self.dones,
+                    c.TERMINATEDS: self.terminateds,
+                    c.TRUNCATEDS: self.truncateds,
                     c.INFOS: self.infos,
                     c.BUFFER_SIZE: self._buffer_size,
                     c.POINTER: pointer,
@@ -472,6 +530,8 @@ class NumPyBuffer(ReplayBuffer):
         self.actions = data[c.ACTIONS]
         self.rewards = data[c.REWARDS]
         self.dones = data[c.DONES]
+        self.terminateds = data[c.TERMINATEDS]
+        self.truncateds = data[c.TRUNCATEDS]
         self.infos = data[c.INFOS]
 
         self._pointer = data[c.POINTER]
@@ -521,6 +581,8 @@ class NextStateNumPyBuffer(NumPyBuffer):
             self.actions[index],
             self.rewards[index],
             self.dones[index],
+            self.terminateds[index],
+            self.truncateds[index],
             self.next_observations[index],
             {
                 info_name: info_value[index]
@@ -558,6 +620,8 @@ class NextStateNumPyBuffer(NumPyBuffer):
                     c.ACTIONS: self.actions[transitions_to_save],
                     c.REWARDS: self.rewards[transitions_to_save],
                     c.DONES: self.dones[transitions_to_save],
+                    c.TERMINATEDS: self.terminateds[transitions_to_save],
+                    c.TRUNCATEDS: self.truncateds[transitions_to_save],
                     c.NEXT_OBSERVATIONS: self.next_observations[transitions_to_save],
                     c.NEXT_HIDDEN_STATES: self.next_hidden_states[transitions_to_save],
                     c.INFOS: {
@@ -577,7 +641,8 @@ class NextStateNumPyBuffer(NumPyBuffer):
         h_state: np.ndarray,
         act: np.ndarray,
         rew: float,
-        done: bool,
+        terminated: bool,
+        truncated: bool,
         info: dict,
         next_obs: np.ndarray,
         next_h_state: np.ndarray,
@@ -587,8 +652,21 @@ class NextStateNumPyBuffer(NumPyBuffer):
         self.next_hidden_states[self._pointer] = next_h_state
 
         return super().push(
-            obs=obs, h_state=h_state, act=act, rew=rew, done=done, info=info
+            obs=obs,
+            h_state=h_state,
+            act=act,
+            rew=rew,
+            terminated=terminated,
+            truncated=truncated,
+            info=info,
         )
+
+    def get_next(
+        self, next_idxes: np.ndarray, next_obs: np.ndarray, next_h_state: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        next_obss = self.next_observations[next_idxes]
+        next_h_states = self.next_hidden_states[next_idxes]
+        return next_obss, next_h_states
 
     def save(self, save_path: str, end_with_done: bool = True, **kwargs):
         pointer = self._pointer
@@ -616,6 +694,8 @@ class NextStateNumPyBuffer(NumPyBuffer):
                     c.ACTIONS: self.actions,
                     c.REWARDS: self.rewards,
                     c.DONES: self.dones,
+                    c.TERMINATEDS: self.terminateds,
+                    c.TRUNCATEDS: self.truncateds,
                     c.NEXT_OBSERVATIONS: self.next_observations,
                     c.NEXT_HIDDEN_STATES: self.next_hidden_states,
                     c.INFOS: self.infos,
@@ -640,6 +720,8 @@ class NextStateNumPyBuffer(NumPyBuffer):
         self.actions = data[c.ACTIONS]
         self.rewards = data[c.REWARDS]
         self.dones = data[c.DONES]
+        self.terminateds = data[c.TERMINATEDS]
+        self.truncateds = data[c.TRUNCATEDS]
         self.infos = data[c.INFOS]
 
         self._pointer = data[c.POINTER]
@@ -692,7 +774,8 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         h_state: np.ndarray,
         act: np.ndarray,
         rew: float,
-        done: bool,
+        terminated: bool,
+        truncated: bool,
         info: dict,
         next_obs: np.ndarray,
         next_h_state: np.ndarray,
@@ -705,13 +788,19 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             if self._episode_lengths[0] <= 0:
                 self._episode_lengths.pop(0)
                 self._episode_start_idxes.pop(0)
-        if done:
+        if terminated or truncated:
             self._episode_lengths.append(0)
             self._last_observations.append(next_obs)
             self._episode_start_idxes.append(self._pointer + 1)
 
         return super().push(
-            obs=obs, h_state=h_state, act=act, rew=rew, done=done, info=info
+            obs=obs,
+            h_state=h_state,
+            act=act,
+            rew=rew,
+            terminated=terminated,
+            truncated=truncated,
+            info=info,
         )
 
     def sample(
@@ -721,6 +810,8 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         horizon_length: int = 1,
         **kwargs,
     ) -> Tuple[
+        np.ndarray,
+        np.ndarray,
         np.ndarray,
         np.ndarray,
         np.ndarray,
@@ -752,9 +843,17 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             (subtraj_start_idxes + episode_start_idxes[episode_idxes])[:, None]
             + sample_lengths
         ) % self._buffer_size
-        obss, h_states, acts, rews, dones, infos, _ = self.get_transitions(
-            sample_idxes.reshape(-1)
-        )
+        (
+            obss,
+            h_states,
+            acts,
+            rews,
+            dones,
+            terminateds,
+            truncateds,
+            infos,
+            _,
+        ) = self.get_transitions(sample_idxes.reshape(-1))
 
         lengths = np.clip(
             batch_episode_lengths - subtraj_start_idxes, a_min=0, a_max=horizon_length
@@ -768,4 +867,15 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         )
         infos[c.EPISODE_IDXES] = episode_idxes
 
-        return obss, h_states, acts, rews, dones, infos, lengths, sample_idxes
+        return (
+            obss,
+            h_states,
+            acts,
+            rews,
+            dones,
+            terminateds,
+            truncateds,
+            infos,
+            lengths,
+            sample_idxes,
+        )

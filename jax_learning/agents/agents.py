@@ -47,12 +47,15 @@ class Agent(ABC):
         h_state: np.ndarray,
         act: np.ndarray,
         rew: float,
-        done: bool,
+        terminated: bool,
+        truncated: bool,
         info: dict,
         next_obs: np.ndarray,
         next_h_state: np.ndarray,
     ):
-        self._buffer.push(obs, h_state, act, rew, done, info, next_obs, next_h_state)
+        self._buffer.push(
+            obs, h_state, act, rew, terminated, truncated, info, next_obs, next_h_state
+        )
 
     def reset(self):
         if hasattr(self.model, RESET):
@@ -78,14 +81,17 @@ class LearningAgent(Agent):
         h_state: np.ndarray,
         act: np.ndarray,
         rew: float,
-        done: bool,
+        terminated: bool,
+        truncated: bool,
         info: dict,
         next_obs: np.ndarray,
         next_h_state: np.ndarray,
     ):
         if self._obs_rms:
             self._obs_rms.update(obs)
-        self._buffer.push(obs, h_state, act, rew, done, info, next_obs, next_h_state)
+        self._buffer.push(
+            obs, h_state, act, rew, terminated, truncated, info, next_obs, next_h_state
+        )
 
     def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
         self.learner.learn(next_obs, next_h_state, learn_info)

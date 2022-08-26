@@ -74,7 +74,7 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            dones: np.ndarray,
+            terminateds: np.ndarray,
             next_obss: np.ndarray,
             next_h_states: np.ndarray,
             keys: Sequence[jrandom.PRNGKey],
@@ -101,7 +101,7 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
                     next_q_preds_min,
                     next_lprobs,
                     rews,
-                    dones,
+                    terminateds,
                     temp,
                     self._gamma,
                 )
@@ -136,7 +136,7 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            dones: np.ndarray,
+            terminateds: np.ndarray,
             next_obss: np.ndarray,
             next_h_states: np.ndarray,
         ) -> Tuple[
@@ -160,7 +160,7 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
                 h_states,
                 acts,
                 rews,
-                dones,
+                terminateds,
                 next_obss,
                 next_h_states,
                 keys,
@@ -303,7 +303,9 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
                 h_states,
                 acts,
                 rews,
-                dones,
+                _,
+                terminateds,
+                _,
                 next_obss,
                 next_h_states,
                 _,
@@ -318,9 +320,23 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
 
-            (obss, h_states, acts, rews, dones, next_obss, next_h_states) = to_jnp(
+            (
+                obss,
+                h_states,
+                acts,
+                rews,
+                terminateds,
+                next_obss,
+                next_h_states,
+            ) = to_jnp(
                 *batch_flatten(
-                    obss, h_states, acts, rews, dones, next_obss, next_h_states
+                    obss,
+                    h_states,
+                    acts,
+                    rews,
+                    terminateds,
+                    next_obss,
+                    next_h_states,
                 )
             )
             q, opt_state, grads, q_learn_info, self._sample_key = self.update_q(
@@ -334,7 +350,7 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
                 h_states=h_states,
                 acts=acts,
                 rews=rews,
-                dones=dones,
+                terminateds=terminateds,
                 next_obss=next_obss,
                 next_h_states=next_h_states,
             )
