@@ -69,7 +69,7 @@ class EpsilonGreedyAgent(RLAgent):
         action_space: str,
         action_dim: int,
         key: jrandom.PRNGKey,
-        action_range: Tuple[float, float]=(-1., 1.),
+        action_range: Tuple[float, float] = (-1.0, 1.0),
     ):
         assert action_space in (CONTINUOUS, DISCRETE)
         super().__init__(model, model_key, buffer, learner, key)
@@ -102,10 +102,17 @@ class EpsilonGreedyAgent(RLAgent):
             obs, h_state
         )
         if jrandom.bernoulli(key=curr_key, p=self._eps):
-            sign = (-1) ** jrandom.randint(curr_key, shape=(self._action_dim,), minval=0, maxval=2)
-            action = sign * jrandom.uniform(
-                curr_key, shape=(self._action_dim,), minval=0, maxval=1
-            ) * self._action_scale + self._action_midpoint
+            sign = (-1) ** jrandom.randint(
+                curr_key, shape=(self._action_dim,), minval=0, maxval=2
+            )
+            action = (
+                sign
+                * jrandom.uniform(
+                    curr_key, shape=(self._action_dim,), minval=0, maxval=1
+                )
+                * self._action_scale
+                + self._action_midpoint
+            )
             info[EXPLORATION_STRATEGY] = 0
         else:
             info[EXPLORATION_STRATEGY] = 1

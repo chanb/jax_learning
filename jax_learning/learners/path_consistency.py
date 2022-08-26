@@ -248,9 +248,15 @@ class PCL(ReinforcementLearner):
             if self._target_entropy is not None:
                 learn_info.setdefault(f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}", 0.0)
                 learn_info.setdefault(f"{w.TRAIN}/{MEAN_TEMPERATURE}", 0.0)
-                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0)
-                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0)
-                learn_info.setdefault(f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0)
+                learn_info.setdefault(
+                    f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0
+                )
+                learn_info.setdefault(
+                    f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0
+                )
+                learn_info.setdefault(
+                    f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0
+                )
                 flattened_sample_mask = np.where(sample_idxes.flatten() != -1)
                 (
                     temperature,
