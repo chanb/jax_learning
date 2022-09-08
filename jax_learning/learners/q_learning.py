@@ -10,7 +10,7 @@ import optax
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
 from jax_learning.common import polyak_average_generator
-from jax_learning.learners import LearnerWithTargetNetwork
+from jax_learning.learners import ReinforcementLearnerWithTargetNetwork
 from jax_learning.losses.value_loss import q_learning_td_error
 from jax_learning.models import ActionValue
 
@@ -30,7 +30,7 @@ Q = "q"
 OMEGA = "omega"
 
 
-class QLearning(LearnerWithTargetNetwork):
+class QLearning(ReinforcementLearnerWithTargetNetwork):
     def __init__(
         self,
         model: Dict[str, eqx.Module],
@@ -55,7 +55,7 @@ class QLearning(LearnerWithTargetNetwork):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            dones: np.ndarray,
+            terminateds: np.ndarray,
             next_obss: np.ndarray,
             next_h_states: np.ndarray,
         ) -> Tuple[np.ndarray, dict]:
@@ -64,7 +64,7 @@ class QLearning(LearnerWithTargetNetwork):
             next_q_preds, _ = jax.vmap(target_q.q_values)(next_obss, next_h_states)
 
             td_errors = _q_learning_td_error(
-                curr_q_preds, acts, next_q_preds, rews, dones, self._gamma
+                curr_q_preds, acts, next_q_preds, rews, terminateds, self._gamma
             )
             loss = jnp.mean(td_errors**2)
             return loss, {
@@ -90,7 +90,7 @@ class QLearning(LearnerWithTargetNetwork):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            dones: np.ndarray,
+            terminateds: np.ndarray,
             next_obss: np.ndarray,
             next_h_states: np.ndarray,
         ) -> Tuple[
@@ -109,7 +109,7 @@ class QLearning(LearnerWithTargetNetwork):
                 h_states,
                 acts,
                 rews,
-                dones,
+                terminateds,
                 next_obss,
                 next_h_states,
             )
@@ -146,7 +146,9 @@ class QLearning(LearnerWithTargetNetwork):
                 h_states,
                 acts,
                 rews,
-                dones,
+                _,
+                terminateds,
+                _,
                 next_obss,
                 next_h_states,
                 _,
@@ -162,9 +164,23 @@ class QLearning(LearnerWithTargetNetwork):
                 obss = self.obs_rms.normalize(obss)
             acts = acts.astype(np.int64)
 
-            (obss, h_states, acts, rews, dones, next_obss, next_h_states) = to_jnp(
+            (
+                obss,
+                h_states,
+                acts,
+                rews,
+                terminateds,
+                next_obss,
+                next_h_states,
+            ) = to_jnp(
                 *batch_flatten(
-                    obss, h_states, acts, rews, dones, next_obss, next_h_states
+                    obss,
+                    h_states,
+                    acts,
+                    rews,
+                    terminateds,
+                    next_obss,
+                    next_h_states,
                 )
             )
             q, opt_state, grads, q_learn_info = self.update_q(
@@ -176,7 +192,7 @@ class QLearning(LearnerWithTargetNetwork):
                 h_states=h_states,
                 acts=acts,
                 rews=rews,
-                dones=dones,
+                terminateds=terminateds,
                 next_obss=next_obss,
                 next_h_states=next_h_states,
             )

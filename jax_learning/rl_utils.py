@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import sys
 import timeit
@@ -38,6 +39,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     render = env.render if cfg.render else lambda: None
     env_rng = cfg.env_rng
     evaluation_frequency = cfg.evaluation_frequency
+    evaluation_env = copy.deepcopy(env)
 
     random_exploration = getattr(cfg, c.RANDOM_EXPLORATION, None)
     num_exploration = getattr(cfg, c.EXPLORATION_STEPS, 0)
@@ -56,7 +58,12 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     tic = timeit.default_timer()
     for timestep_i in range(max_timesteps):
         timestep_dict = {f"{w.TRAIN}/{w.TIMESTEP}": timestep_i}
-        act, next_h_state = agent.compute_action(obs, h_state, timestep_dict)
+
+        # TODO: Implement a nicer way to do this... just testing PCL with different exploration.
+        if np.random.rand() < 0.5:
+            act, next_h_state = agent.deterministic_action(obs, h_state, timestep_dict)
+        else:
+            act, next_h_state = agent.compute_action(obs, h_state, timestep_dict)
 
         if timestep_i < num_exploration:
             act = random_exploration()
@@ -64,15 +71,27 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         env_act = act
         if clip_action:
             env_act = np.clip(act, min_action, max_action)
-        next_obs, rew, done, info = env.step(env_act)
+        next_obs, rew, terminated, truncated, info = env.step(env_act)
         render()
-        agent.store(obs, h_state, act, rew, done, info, next_obs, next_h_state)
+        agent.store(
+            obs, h_state, act, rew, terminated, truncated, info, next_obs, next_h_state
+        )
         agent.learn(next_obs, next_h_state, timestep_dict)
+
+        if (timestep_i + 1) % log_interval == 0:
+            print("Epoch {} ".format((timestep_i + 1) // log_interval) + "=" * 50)
+            print(
+                "Current return (episode: {}, is finished: {}, is truncated: {}) with length {}: {}".format(
+                    ep_i, terminated, truncated, ep_len, ep_return
+                )
+            )
+            print(agent.model[agent.model_key].dist_params(obs, h_state))
+
         obs = next_obs
         ep_return += rew
         ep_len += 1
 
-        if done:
+        if terminated or truncated:
             obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
             h_state = agent.reset()
             timestep_dict[f"{w.TRAIN}/{w.EPISODIC_RETURN}"] = ep_return
@@ -83,7 +102,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
             ep_i += 1
 
         if evaluation_frequency and (timestep_i + 1) % evaluation_frequency == 0:
-            evaluate(env, agent, cfg.evaluation_cfg, timestep_dict)
+            evaluate(evaluation_env, agent, cfg.evaluation_cfg, timestep_dict)
 
         metrics_batch.append(timestep_dict)
         if (timestep_i + 1) % log_interval == 0:
@@ -115,20 +134,28 @@ def evaluate(env: Any, agent: Agent, cfg: Namespace, timestep_dict: dict):
         h_state = agent.reset()
         ep_return = 0.0
         ep_length = 0
-        done = False
-        while not done:
+        terminated = False
+        truncated = False
+        while not terminated and not truncated:
             act, h_state = agent.deterministic_action(obs, h_state, timestep_dict)
             env_act = act
             if clip_action:
                 env_act = np.clip(act, min_action, max_action)
-            obs, rew, done, info = env.step(env_act)
+            obs, rew, terminated, truncated, info = env.step(env_act)
             render()
             ep_return += rew
             ep_length += 1
             timestep_i += 1
 
-            if done:
+            if terminated or truncated:
                 ep_returns.append(ep_return)
                 ep_lengths.append(ep_length)
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODIC_RETURN}"] = np.mean(ep_returns)
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}"] = np.mean(ep_lengths)
+
+    print("Evaluation:")
+    print(
+        "Mean return: {}, Mean length: {}".format(
+            np.mean(ep_returns), np.mean(ep_lengths)
+        )
+    )

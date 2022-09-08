@@ -73,7 +73,7 @@ class ReinforcementLearner:
         raise NotImplementedError
 
 
-class LearnerWithTargetNetwork(ReinforcementLearner):
+class ReinforcementLearnerWithTargetNetwork(ReinforcementLearner):
     def __init__(
         self,
         model: Dict[str, eqx.Module],

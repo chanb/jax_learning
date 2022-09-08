@@ -6,9 +6,58 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 
-from jax_learning.distributions import Normal
+from jax_learning.distributions import Normal, Categorical
 from jax_learning.distributions.transforms import TanhTransform
 from jax_learning.models import StochasticPolicy, MLP
+
+
+class MLPSoftmaxPolicy(StochasticPolicy):
+    obs_dim: int
+    act_dim: int
+    policy: eqx.Module
+
+    def __init__(
+        self,
+        obs_dim: Sequence[int],
+        act_dim: Sequence[int],
+        hidden_dim: int,
+        num_hidden: int,
+        key: jrandom.PRNGKey,
+    ):
+        self.obs_dim = int(np.product(obs_dim))
+        self.act_dim = int(np.product(act_dim))
+        self.policy = MLP(self.obs_dim, self.act_dim, hidden_dim, num_hidden, key)
+
+    def deterministic_action(
+        self, obs: np.ndarray, h_state: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        logits = self.dist_params(obs, h_state)
+        return jnp.argmax(logits, axis=-1), h_state
+
+    def random_action(
+        self, obs: np.ndarray, h_state: np.ndarray, key: jrandom.PRNGKey
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        logits = self.dist_params(obs, h_state)
+        act = Categorical.sample(logits, key)
+        return act, h_state
+
+    def act_lprob(
+        self, obs: np.ndarray, h_state: np.ndarray, key: jrandom.PRNGKey
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        logits = self.dist_params(obs, h_state)
+        act = Categorical.sample(logits, key)
+        lprob = Categorical.lprob(logits, act)
+        return act, lprob, h_state
+
+    def dist_params(self, obs: np.ndarray, h_state: np.ndarray) -> Sequence[np.ndarray]:
+        return self.policy(obs)
+
+    def lprob(
+        self, obs: np.ndarray, h_state: np.ndarray, act: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        logits = self.dist_params(obs, h_state)
+        lprob = Categorical.lprob(logits, act)
+        return lprob, h_state
 
 
 class MLPGaussianPolicy(StochasticPolicy):
@@ -105,8 +154,9 @@ class MLPSquashedGaussianPolicy(MLPGaussianPolicy):
     def lprob(
         self, obs: np.ndarray, h_state: np.ndarray, act: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
-        act_t = jnp.arctanh(act)
+        act_pret = jnp.arctanh(act)
+        print(act, act_pret)
         act_mean, act_std = self.dist_params(obs, h_state)
         lprob = Normal.lprob(act_mean, act_std, act)
-        lprob = lprob - TanhTransform.log_abs_det_jacobian(act, act_t)
+        lprob = lprob - TanhTransform.log_abs_det_jacobian(act_pret, act)
         return lprob, h_state

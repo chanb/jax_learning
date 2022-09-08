@@ -36,7 +36,8 @@ class ReplayBuffer(ABC):
         h_state: np.ndarray,
         act: np.ndarray,
         rew: float,
-        done: bool,
+        terminated: bool,
+        truncated: bool,
         info: dict,
         **kwargs
     ) -> bool:
@@ -50,6 +51,8 @@ class ReplayBuffer(ABC):
     def sample(
         self, batch_size: int, idxes: Optional[np.ndarray] = None, **kwargs
     ) -> Tuple[
+        np.ndarray,
+        np.ndarray,
         np.ndarray,
         np.ndarray,
         np.ndarray,

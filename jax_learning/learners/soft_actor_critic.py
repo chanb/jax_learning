@@ -11,7 +11,7 @@ from typing import Sequence, Tuple, Dict
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import batch_flatten, to_jnp
 from jax_learning.common import polyak_average_generator
-from jax_learning.learners import LearnerWithTargetNetwork
+from jax_learning.learners import ReinforcementLearnerWithTargetNetwork
 from jax_learning.losses.policy_loss import sac_policy_loss
 from jax_learning.losses.temperature_loss import sac_temperature_loss
 from jax_learning.losses.value_loss import clipped_min_q_td_error
@@ -41,7 +41,7 @@ TARGET_ENTROPY = "target_entropy"
 OMEGA = "omega"
 
 
-class SAC(LearnerWithTargetNetwork):
+class SAC(ReinforcementLearnerWithTargetNetwork):
     def __init__(
         self,
         model: Dict[str, eqx.Module],
@@ -57,7 +57,6 @@ class SAC(LearnerWithTargetNetwork):
 
         self._buffer_warmup = cfg.buffer_warmup
         self._actor_update_frequency = cfg.actor_update_frequency
-        self._target_update_frequency = cfg.target_update_frequency
 
         self._target_entropy = getattr(cfg, TARGET_ENTROPY, None)
         self._sample_key = jrandom.PRNGKey(cfg.seed)
@@ -75,7 +74,7 @@ class SAC(LearnerWithTargetNetwork):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            dones: np.ndarray,
+            terminateds: np.ndarray,
             next_obss: np.ndarray,
             next_h_states: np.ndarray,
             keys: Sequence[jrandom.PRNGKey],
@@ -102,7 +101,7 @@ class SAC(LearnerWithTargetNetwork):
                     next_q_preds_min,
                     next_lprobs,
                     rews,
-                    dones,
+                    terminateds,
                     temp,
                     self._gamma,
                 )
@@ -137,7 +136,7 @@ class SAC(LearnerWithTargetNetwork):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            dones: np.ndarray,
+            terminateds: np.ndarray,
             next_obss: np.ndarray,
             next_h_states: np.ndarray,
         ) -> Tuple[
@@ -161,7 +160,7 @@ class SAC(LearnerWithTargetNetwork):
                 h_states,
                 acts,
                 rews,
-                dones,
+                terminateds,
                 next_obss,
                 next_h_states,
                 keys,
@@ -215,7 +214,11 @@ class SAC(LearnerWithTargetNetwork):
             h_states: np.ndarray,
             acts: np.ndarray,
         ) -> Tuple[
-            ActionValue, optax.OptState, jax.tree_util.PyTreeDef, dict, jrandom.PRNGKey
+            StochasticPolicy,
+            optax.OptState,
+            jax.tree_util.PyTreeDef,
+            dict,
+            jrandom.PRNGKey,
         ]:
             sample_key = jrandom.split(self._sample_key, num=1)[0]
             keys = jrandom.split(self._sample_key, num=self._batch_size)
@@ -258,7 +261,7 @@ class SAC(LearnerWithTargetNetwork):
             obss: np.ndarray,
             h_states: np.ndarray,
         ) -> Tuple[
-            ActionValue, optax.OptState, jax.tree_util.PyTreeDef, dict, jrandom.PRNGKey
+            Temperature, optax.OptState, jax.tree_util.PyTreeDef, dict, jrandom.PRNGKey
         ]:
             sample_key = jrandom.split(self._sample_key, num=1)[0]
             keys = jrandom.split(self._sample_key, num=self._batch_size)
@@ -300,7 +303,9 @@ class SAC(LearnerWithTargetNetwork):
                 h_states,
                 acts,
                 rews,
-                dones,
+                _,
+                terminateds,
+                _,
                 next_obss,
                 next_h_states,
                 _,
@@ -315,9 +320,23 @@ class SAC(LearnerWithTargetNetwork):
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
 
-            (obss, h_states, acts, rews, dones, next_obss, next_h_states) = to_jnp(
+            (
+                obss,
+                h_states,
+                acts,
+                rews,
+                terminateds,
+                next_obss,
+                next_h_states,
+            ) = to_jnp(
                 *batch_flatten(
-                    obss, h_states, acts, rews, dones, next_obss, next_h_states
+                    obss,
+                    h_states,
+                    acts,
+                    rews,
+                    terminateds,
+                    next_obss,
+                    next_h_states,
                 )
             )
             q, opt_state, grads, q_learn_info, self._sample_key = self.update_q(
@@ -331,7 +350,7 @@ class SAC(LearnerWithTargetNetwork):
                 h_states=h_states,
                 acts=acts,
                 rews=rews,
-                dones=dones,
+                terminateds=terminateds,
                 next_obss=next_obss,
                 next_h_states=next_h_states,
             )
@@ -377,11 +396,17 @@ class SAC(LearnerWithTargetNetwork):
                 ] = policy_learn_info["mean_policy_log_prob"]
 
                 if self._target_entropy is not None:
-                    learn_info(f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}", 0.0)
-                    learn_info(f"{w.TRAIN}/{MEAN_TEMPERATURE}", 0.0)
-                    learn_info(f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0)
-                    learn_info(f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0)
-                    learn_info(f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0)
+                    learn_info.setdefault(f"{w.LOSSES}/{MEAN_TEMPERATURE_LOSS}", 0.0)
+                    learn_info.setdefault(f"{w.TRAIN}/{MEAN_TEMPERATURE}", 0.0)
+                    learn_info.setdefault(
+                        f"{w.ACTION_LOG_PROBS}/max_temperature_log_prob", 0.0
+                    )
+                    learn_info.setdefault(
+                        f"{w.ACTION_LOG_PROBS}/min_temperature_log_prob", 0.0
+                    )
+                    learn_info.setdefault(
+                        f"{w.ACTION_LOG_PROBS}/mean_temperature_log_prob", 0.0
+                    )
                     (
                         temperature,
                         opt_state,
