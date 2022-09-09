@@ -104,7 +104,10 @@ class PCL(ReinforcementLearner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
+<<<<<<< HEAD
             terminateds: np.ndarray,
+=======
+>>>>>>> main
             lengths: np.ndarray,
         ) -> Tuple[
             StochasticPolicy,
