@@ -19,4 +19,6 @@ setup(
     },
     packages=find_packages(),
     include_package_data=True,
+    license="MIT",
+    url='http://github.com/chanb/jax_learning',
 )
