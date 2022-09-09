@@ -61,7 +61,7 @@ class NumPyBuffer(ReplayBuffer):
             self.historic_dones = np.ones(shape=(burn_in_window, 1), dtype=np.float32)
 
         self._checkpoint_interval = checkpoint_interval
-        self._checkpoint_idxes = np.ones(shape=buffer_size, dtype=np.bool_)
+        self._checkpoint_idxes = np.ones(shape=buffer_size, dtype=bool)
         if checkpoint_path is not None and buffer_size >= checkpoint_interval > 0:
             self._checkpoint_path = checkpoint_path
             os.makedirs(checkpoint_path, exist_ok=True)
@@ -223,7 +223,7 @@ class NumPyBuffer(ReplayBuffer):
         historic_hidden_states = np.zeros(
             (len(idxes), self.burn_in_window, *self.hidden_states.shape[1:])
         )
-        not_dones = np.ones((len(idxes), self.burn_in_window), dtype=np.bool_)
+        not_dones = np.ones((len(idxes), self.burn_in_window), dtype=bool)
         lengths = np.zeros(len(idxes), dtype=np.int64)
 
         shifted_idxes = (

@@ -56,7 +56,7 @@ class PCL(ReinforcementLearner):
         self._horizon_length = getattr(cfg, HORIZON_LENGTH, 1) + 1
 
         _path_consistency_error = jax.vmap(
-            path_consistency_error, in_axes=[0, 0, 0, 0, None, None]
+            path_consistency_error, in_axes=[0, 0, 0, 0, 0, None, None]
         )
 
         @eqx.filter_grad(has_aux=True)
@@ -67,6 +67,7 @@ class PCL(ReinforcementLearner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
+            terminateds: np.ndarray,
             lengths: np.ndarray,
             keys: Sequence[jrandom.PRNGKey],
         ) -> Tuple[np.ndarray, dict]:
@@ -78,7 +79,13 @@ class PCL(ReinforcementLearner):
             temp = temperature()
 
             pcl_errors = _path_consistency_error(
-                lprobs, v_preds, rews[..., 0], lengths, temp, self._gamma
+                lprobs,
+                v_preds,
+                rews[..., 0],
+                terminateds,
+                lengths - 1,
+                temp,
+                self._gamma,
             )
             loss = jnp.sum(jnp.mean(pcl_errors**2, axis=0))
             return loss, {
@@ -97,6 +104,7 @@ class PCL(ReinforcementLearner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
+            terminateds: np.ndarray,
             lengths: np.ndarray,
         ) -> Tuple[
             StochasticPolicy,
@@ -119,6 +127,7 @@ class PCL(ReinforcementLearner):
                 h_states,
                 acts,
                 rews,
+                terminateds,
                 lengths,
                 keys,
             )
@@ -241,6 +250,7 @@ class PCL(ReinforcementLearner):
                 h_states=h_states.reshape(*sample_idxes.shape, -1),
                 acts=acts.reshape(*sample_idxes.shape, -1),
                 rews=rews.reshape(*sample_idxes.shape, -1),
+                terminateds=terminateds.reshape(*sample_idxes.shape, -1),
                 lengths=lengths,
             )
 

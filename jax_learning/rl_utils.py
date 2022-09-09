@@ -49,7 +49,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         max_action = cfg.max_action
         min_action = cfg.min_action
 
-    obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
+    obs, info = env.reset(seed=env_rng.randint(0, sys.maxsize))
     h_state = agent.reset()
     ep_return = 0.0
     ep_i = 0
@@ -92,7 +92,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         ep_len += 1
 
         if terminated or truncated:
-            obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
+            obs, info = env.reset(seed=env_rng.randint(0, sys.maxsize))
             h_state = agent.reset()
             timestep_dict[f"{w.TRAIN}/{w.EPISODIC_RETURN}"] = ep_return
             timestep_dict[f"{w.TRAIN}/{w.EPISODE}"] = ep_i
@@ -130,7 +130,7 @@ def evaluate(env: Any, agent: Agent, cfg: Namespace, timestep_dict: dict):
     ep_lengths = []
     ep_returns = []
     for _ in range(num_episodes):
-        obs = env.reset(seed=env_rng.randint(0, sys.maxsize))
+        obs, info = env.reset(seed=env_rng.randint(0, sys.maxsize))
         h_state = agent.reset()
         ep_return = 0.0
         ep_length = 0

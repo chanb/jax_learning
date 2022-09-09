@@ -59,13 +59,16 @@ def path_consistency_error(
     lprobs: np.ndarray,
     v_preds: np.ndarray,
     rews: np.ndarray,
-    length: np.ndarray,
+    terminateds: np.ndarray,
+    ep_last_idx: np.ndarray,
     temp: np.ndarray,
     gamma: float,
 ) -> np.ndarray:
     ent_reg_rews = rews - temp * lprobs
     target = 0
     disc_rews = ent_reg_rews * (gamma ** np.arange(len(ent_reg_rews)))
-    target = jnp.where(jnp.arange(disc_rews.shape[0]) < length, disc_rews, 0).sum()
-    target += (length == len(ent_reg_rews)) * (gamma**length) * v_preds[length]
+    target = jnp.where(jnp.arange(disc_rews.shape[0]) < ep_last_idx, disc_rews, 0).sum()
+    target += (
+        (1 - terminateds[ep_last_idx]) * (gamma**ep_last_idx) * v_preds[ep_last_idx]
+    )
     return v_preds[0] - target[0]
