@@ -220,6 +220,7 @@ class PCL(ReinforcementLearner):
                 sample_idxes,
             ) = self.buffer.sample(
                 batch_size=self._batch_size,
+                next_obs=next_obs,
                 horizon_length=self._horizon_length,
             )
 

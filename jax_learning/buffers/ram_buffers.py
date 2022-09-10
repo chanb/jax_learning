@@ -806,8 +806,9 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
     def sample(
         self,
         batch_size: int,
+        next_obs: np.ndarray,
         idxes: Optional[np.ndarray] = None,
-        horizon_length: int = 1,
+        horizon_length: int = 2,
         **kwargs,
     ) -> Tuple[
         np.ndarray,
@@ -821,12 +822,16 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         np.ndarray,
         np.ndarray,
     ]:
+        assert (
+            horizon_length >= 2
+        ), f"horizon_length must be at least length of 2. Got: {horizon_length}"
         if not len(self._episode_lengths):
             raise NoSampleError
 
         if idxes is None:
             episode_idxes = self.rng.randint(
-                len(self._episode_lengths) - int(self._episode_lengths[-1] == 0),
+                int(self._episode_lengths[0] <= 1),
+                len(self._episode_lengths) - int(self._episode_lengths[-1] <= 1),
                 size=batch_size,
             )
         else:
@@ -838,7 +843,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         batch_episode_lengths = episode_lengths[episode_idxes]
 
         sample_lengths = np.tile(np.arange(horizon_length), (batch_size, 1))
-        subtraj_start_idxes = self.rng.randint(batch_episode_lengths)
+        subtraj_start_idxes = self.rng.randint(batch_episode_lengths - 1)
         sample_idxes = (
             (subtraj_start_idxes + episode_start_idxes[episode_idxes])[:, None]
             + sample_lengths
@@ -855,17 +860,28 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             _,
         ) = self.get_transitions(sample_idxes.reshape(-1))
 
-        lengths = np.clip(
+        ep_lengths = np.clip(
             batch_episode_lengths - subtraj_start_idxes, a_min=0, a_max=horizon_length
         ).astype(np.int64)
         sample_mask = np.flip(
-            np.cumsum(np.eye(horizon_length)[horizon_length - lengths], axis=-1),
+            np.cumsum(np.eye(horizon_length)[horizon_length - ep_lengths], axis=-1),
             axis=-1,
         )
         sample_idxes = sample_idxes * sample_mask - np.ones(sample_idxes.shape) * (
             1 - sample_mask
         )
         infos[c.EPISODE_IDXES] = episode_idxes
+
+        # If the episode ends too early, then the last observation should be in the trajectory
+        # at index length_i of the trajectory.
+        for sample_i, (ep_i, length_i) in enumerate(zip(episode_idxes, ep_lengths)):
+            if length_i == horizon_length:
+                continue
+            obss[sample_i * horizon_length + length_i] = (
+                self._last_observations[ep_i]
+                if ep_i < len(self._last_observations)
+                else next_obs
+            )
 
         return (
             obss,
@@ -876,6 +892,6 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             terminateds,
             truncateds,
             infos,
-            lengths,
+            ep_lengths,
             sample_idxes,
         )
