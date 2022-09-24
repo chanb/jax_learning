@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from typing import Tuple
 
 from jax_learning.buffers import ReplayBuffer
+from jax_learning.common import EpochSummary
 from jax_learning.constants import RESET
 from jax_learning.learners import ReinforcementLearner
 
@@ -93,5 +94,11 @@ class LearningAgent(Agent):
             obs, h_state, act, rew, terminated, truncated, info, next_obs, next_h_state
         )
 
-    def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
-        self.learner.learn(next_obs, next_h_state, learn_info)
+    def learn(
+        self,
+        next_obs: np.ndarray,
+        next_h_state: np.ndarray,
+        learn_info: dict,
+        epoch_summary: EpochSummary,
+    ):
+        self.learner.learn(next_obs, next_h_state, learn_info, epoch_summary)

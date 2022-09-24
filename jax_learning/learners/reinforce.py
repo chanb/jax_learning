@@ -9,6 +9,7 @@ import optax
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
+from jax_learning.common import EpochSummary
 from jax_learning.learners import ReinforcementLearner
 from jax_learning.losses.policy_loss import reinforce_loss
 from jax_learning.losses.value_loss import monte_carlo_returns
@@ -40,6 +41,7 @@ class REINFORCE(ReinforcementLearner):
         self._sample_idxes = np.arange(self._update_frequency)
 
         @eqx.filter_grad(has_aux=True)
+        @eqx.filter_jit()
         def compute_loss(
             policy: StochasticPolicy,
             obss: np.ndarray,
@@ -77,7 +79,13 @@ class REINFORCE(ReinforcementLearner):
 
         self.update_policy = eqx.filter_jit(update_policy)
 
-    def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
+    def learn(
+        self,
+        next_obs: np.ndarray,
+        next_h_state: np.ndarray,
+        learn_info: dict,
+        epoch_summary: EpochSummary,
+    ):
         self._step += 1
 
         if self._step % self._update_frequency != 0:

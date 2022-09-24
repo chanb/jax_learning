@@ -9,7 +9,7 @@ import optax
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
-from jax_learning.common import polyak_average_generator
+from jax_learning.common import EpochSummary, polyak_average_generator
 from jax_learning.learners import ReinforcementLearnerWithTargetNetwork
 from jax_learning.losses.value_loss import q_learning_td_error
 from jax_learning.models import ActionValue
@@ -49,6 +49,7 @@ class QLearning(ReinforcementLearnerWithTargetNetwork):
         )
 
         @eqx.filter_grad(has_aux=True)
+        @eqx.filter_jit()
         def compute_loss(
             models: Tuple[ActionValue, ActionValue],
             obss: np.ndarray,
@@ -123,7 +124,13 @@ class QLearning(ReinforcementLearnerWithTargetNetwork):
 
         self.update_q = eqx.filter_jit(update_q)
 
-    def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
+    def learn(
+        self,
+        next_obs: np.ndarray,
+        next_h_state: np.ndarray,
+        learn_info: dict,
+        epoch_summary: EpochSummary,
+    ):
         self._step += 1
 
         if (

@@ -1,6 +1,7 @@
-from typing import Sequence, Callable
+from typing import Sequence, Callable, Any
 
 import numpy as np
+import timeit
 import wandb
 
 import jax_learning.wandb_constants as w
@@ -87,3 +88,95 @@ class RunningMeanStd:
         x_shape = x.shape
         x = x.reshape(-1, *self.shape)
         return (x * np.sqrt(self.var + self.epsilon) + self.mean).reshape(x_shape)
+
+
+CONTENT = "content"
+LOG_SETTING = "log_setting"
+STANDARD_DEVIATION = "standard_deviation"
+MIN_MAX = "min_max"
+AXIS = "axis"
+
+
+class EpochSummary:
+    def __init__(self, default_key_length: int = 10, padding: int = 11):
+        self._key_length = default_key_length
+        self._padding = padding
+        self._summary = dict()
+        self._epoch = 0
+        self._init_tic = timeit.default_timer()
+
+    def log(
+        self,
+        key: str,
+        value: Any,
+        track_std: bool = True,
+        track_min_max: bool = True,
+        axis: int = None,
+    ):
+        self._key_length = max(self._key_length, len(key))
+        self._summary.setdefault(
+            key,
+            {
+                LOG_SETTING: {
+                    STANDARD_DEVIATION: track_std,
+                    MIN_MAX: track_min_max,
+                    AXIS: axis,
+                },
+                CONTENT: [],
+            },
+        )
+        self._summary[key][CONTENT].append(value)
+
+    def new_epoch(self):
+        self._epoch += 1
+        self._summary.clear()
+        self._curr_tic = timeit.default_timer()
+
+    def print_summary(self):
+        toc = timeit.default_timer()
+        key_length = self._key_length + self._padding
+        print("=" * 100)
+        print(f"Epoch: {self._epoch}")
+        print(f"Epoch Time Spent: {toc - self._curr_tic}")
+        print(f"Total Time Spent: {toc - self._init_tic}")
+        print("=" * 100)
+        print("|".join(str(x).ljust(key_length) for x in ("Key", "Content")))
+        print("-" * 100)
+        for key in sorted(self._summary):
+            val = self._summary[key][CONTENT]
+            setting = self._summary[key][LOG_SETTING]
+            try:
+                print(
+                    "|".join(
+                        str(x).ljust(key_length)
+                        for x in (f"{key} - AVG", np.mean(val, axis=setting[AXIS]))
+                    )
+                )
+                if setting[STANDARD_DEVIATION]:
+                    print(
+                        "|".join(
+                            str(x).ljust(key_length)
+                            for x in (
+                                f"{key} - STD DEV",
+                                np.std(val, axis=setting[AXIS]),
+                            )
+                        )
+                    )
+                if setting[MIN_MAX]:
+                    print(
+                        "|".join(
+                            str(x).ljust(key_length)
+                            for x in (f"{key} - MIN", np.min(val, axis=setting[AXIS]))
+                        )
+                    )
+                    print(
+                        "|".join(
+                            str(x).ljust(key_length)
+                            for x in (f"{key} - MAX", np.max(val, axis=setting[AXIS]))
+                        )
+                    )
+            except:
+                print(val)
+                print(key)
+                assert 0
+        print("=" * 100)
