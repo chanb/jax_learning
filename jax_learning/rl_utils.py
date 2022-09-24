@@ -162,6 +162,6 @@ def evaluate(
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}"] = np.mean(ep_lengths)
 
     epoch_summary.log(
-        f"{w.EVALUATION}/mean_{w.EPISODIC_RETURN}", np.mean(ep_returns), axis=0
+        f"{w.EVALUATION}/mean_{c.EPISODIC_RETURN}", np.mean(ep_returns), axis=0
     )
-    epoch_summary.log(f"{w.EVALUATION}/mean_{w.EPISODE_LENGTH}", np.mean(ep_lengths))
+    epoch_summary.log(f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}", np.mean(ep_lengths))
