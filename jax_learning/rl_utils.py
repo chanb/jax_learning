@@ -62,11 +62,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     for timestep_i in range(max_timesteps):
         timestep_dict = {f"{w.TRAIN}/{w.TIMESTEP}": timestep_i}
 
-        # TODO: Implement a nicer way to do this... just testing PCL with different exploration.
-        if np.random.rand() < 0.5:
-            act, next_h_state = agent.deterministic_action(obs, h_state, timestep_dict)
-        else:
-            act, next_h_state = agent.compute_action(obs, h_state, timestep_dict)
+        act, next_h_state = agent.compute_action(obs, h_state, timestep_dict)
 
         if timestep_i < num_exploration:
             act = random_exploration()
