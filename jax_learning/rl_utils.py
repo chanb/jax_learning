@@ -11,6 +11,7 @@ import jax_learning.constants as c
 import jax_learning.wandb_constants as w
 
 from jax_learning.agents import Agent
+from jax_learning.common import EpochSummary
 
 
 def random_exploration_generator(
@@ -55,6 +56,8 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     ep_i = 0
     ep_len = 0
     metrics_batch = []
+    epoch_summary = EpochSummary()
+    epoch_summary.new_epoch()
     tic = timeit.default_timer()
     for timestep_i in range(max_timesteps):
         timestep_dict = {f"{w.TRAIN}/{w.TIMESTEP}": timestep_i}
@@ -76,16 +79,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         agent.store(
             obs, h_state, act, rew, terminated, truncated, info, next_obs, next_h_state
         )
-        agent.learn(next_obs, next_h_state, timestep_dict)
-
-        if (timestep_i + 1) % log_interval == 0:
-            print("Epoch {} ".format((timestep_i + 1) // log_interval) + "=" * 50)
-            print(
-                "Current return (episode: {}, is finished: {}, is truncated: {}) with length {}: {}".format(
-                    ep_i, terminated, truncated, ep_len, ep_return
-                )
-            )
-            print(agent.model[agent.model_key].dist_params(obs, h_state))
+        agent.learn(next_obs, next_h_state, timestep_dict, epoch_summary)
 
         obs = next_obs
         ep_return += rew
@@ -94,6 +88,8 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         if terminated or truncated:
             obs, info = env.reset(seed=env_rng.randint(0, sys.maxsize))
             h_state = agent.reset()
+            epoch_summary.log(f"{w.TRAIN}/{w.EPISODIC_RETURN}", ep_return, axis=0)
+            epoch_summary.log(f"{w.TRAIN}/{w.EPISODE_LENGTH}", ep_len)
             timestep_dict[f"{w.TRAIN}/{w.EPISODIC_RETURN}"] = ep_return
             timestep_dict[f"{w.TRAIN}/{w.EPISODE}"] = ep_i
             timestep_dict[f"{w.TRAIN}/{w.EPISODE_LENGTH}"] = ep_len
@@ -102,13 +98,19 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
             ep_i += 1
 
         if evaluation_frequency and (timestep_i + 1) % evaluation_frequency == 0:
-            evaluate(evaluation_env, agent, cfg.evaluation_cfg, timestep_dict)
+            evaluate(
+                evaluation_env, agent, cfg.evaluation_cfg, timestep_dict, epoch_summary
+            )
 
         metrics_batch.append(timestep_dict)
         if (timestep_i + 1) % log_interval == 0:
+            epoch_summary.print_summary()
+            epoch_summary.new_epoch()
+
             toc = timeit.default_timer()
             timestep_dict[c.TIMEDIFF] = toc - tic
             tic = timeit.default_timer()
+
             for metrics in metrics_batch:
                 wandb.log(metrics)
             metrics_batch = []
@@ -117,7 +119,13 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         wandb.log(metrics)
 
 
-def evaluate(env: Any, agent: Agent, cfg: Namespace, timestep_dict: dict):
+def evaluate(
+    env: Any,
+    agent: Agent,
+    cfg: Namespace,
+    timestep_dict: dict,
+    epoch_summary: EpochSummary,
+):
     num_episodes = cfg.num_episodes
     render = env.render if cfg.render else lambda: None
     env_rng = cfg.env_rng
@@ -153,9 +161,7 @@ def evaluate(env: Any, agent: Agent, cfg: Namespace, timestep_dict: dict):
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODIC_RETURN}"] = np.mean(ep_returns)
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}"] = np.mean(ep_lengths)
 
-    print("Evaluation:")
-    print(
-        "Mean return: {}, Mean length: {}".format(
-            np.mean(ep_returns), np.mean(ep_lengths)
-        )
+    epoch_summary.log(
+        f"{w.EVALUATION}/mean_{c.EPISODIC_RETURN}", np.mean(ep_returns), axis=0
     )
+    epoch_summary.log(f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}", np.mean(ep_lengths))

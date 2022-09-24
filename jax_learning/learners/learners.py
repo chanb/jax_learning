@@ -8,7 +8,7 @@ import numpy as np
 import optax
 
 from jax_learning.buffers import ReplayBuffer
-from jax_learning.common import RunningMeanStd, polyak_average_generator
+from jax_learning.common import EpochSummary, RunningMeanStd, polyak_average_generator
 from jax_learning.constants import NORMALIZE_OBS, NORMALIZE_VALUE
 
 
@@ -69,7 +69,13 @@ class ReinforcementLearner:
         return self._val_rms
 
     @abstractmethod
-    def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
+    def learn(
+        self,
+        next_obs: np.ndarray,
+        next_h_state: np.ndarray,
+        learn_info: dict,
+        epoch_summary: EpochSummary,
+    ):
         raise NotImplementedError
 
 

@@ -10,6 +10,7 @@ from typing import Sequence, Tuple, Dict
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import batch_flatten, to_jnp
+from jax_learning.common import EpochSummary
 from jax_learning.learners import ReinforcementLearner
 from jax_learning.losses.temperature_loss import sac_temperature_loss
 from jax_learning.losses.value_loss import path_consistency_error
@@ -60,6 +61,7 @@ class PCL(ReinforcementLearner):
         )
 
         @eqx.filter_grad(has_aux=True)
+        @eqx.filter_jit()
         def pc_loss(
             models: Tuple[StochasticPolicy, Value],
             temperature: Temperature,
@@ -153,6 +155,7 @@ class PCL(ReinforcementLearner):
         _sac_temperature_loss = jax.vmap(sac_temperature_loss, in_axes=[None, 0, None])
 
         @eqx.filter_grad(has_aux=True)
+        @eqx.filter_jit()
         def temperature_loss(
             temperature: Temperature,
             policy: StochasticPolicy,
@@ -195,7 +198,13 @@ class PCL(ReinforcementLearner):
         self.update_models = eqx.filter_jit(update_models)
         self.update_temperature = eqx.filter_jit(update_temperature)
 
-    def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
+    def learn(
+        self,
+        next_obs: np.ndarray,
+        next_h_state: np.ndarray,
+        learn_info: dict,
+        epoch_summary: EpochSummary,
+    ):
         self._step += 1
 
         if (
