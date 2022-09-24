@@ -215,6 +215,7 @@ class PCL(ReinforcementLearner):
                 _,
                 terminateds,
                 _,
+                _,
                 lengths,
                 traj_lengths,
                 sample_idxes,
