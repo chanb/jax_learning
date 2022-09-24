@@ -68,7 +68,7 @@ class PCL(ReinforcementLearner):
             acts: np.ndarray,
             rews: np.ndarray,
             terminateds: np.ndarray,
-            lengths: np.ndarray,
+            ep_lengths: np.ndarray,
             keys: Sequence[jrandom.PRNGKey],
         ) -> Tuple[np.ndarray, dict]:
             (policy, v) = models
@@ -83,7 +83,7 @@ class PCL(ReinforcementLearner):
                 v_preds,
                 rews[..., 0],
                 terminateds,
-                lengths - 1,
+                ep_lengths - 1,
                 temp,
                 self._gamma,
             )
@@ -105,7 +105,7 @@ class PCL(ReinforcementLearner):
             acts: np.ndarray,
             rews: np.ndarray,
             terminateds: np.ndarray,
-            lengths: np.ndarray,
+            ep_lengths: np.ndarray,
         ) -> Tuple[
             StochasticPolicy,
             Value,
@@ -128,7 +128,7 @@ class PCL(ReinforcementLearner):
                 acts,
                 rews,
                 terminateds,
-                lengths,
+                ep_lengths,
                 keys,
             )
             (policy_grads, v_grads) = grads
@@ -215,8 +215,8 @@ class PCL(ReinforcementLearner):
                 _,
                 terminateds,
                 _,
-                _,
                 lengths,
+                ep_lengths,
                 sample_idxes,
             ) = self.buffer.sample(
                 batch_size=self._batch_size,
@@ -227,8 +227,10 @@ class PCL(ReinforcementLearner):
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
 
-            (obss, h_states, acts, rews, terminateds, lengths) = to_jnp(
-                *batch_flatten(obss, h_states, acts, rews, terminateds, lengths)
+            (obss, h_states, acts, rews, terminateds, lengths, ep_lengths) = to_jnp(
+                *batch_flatten(
+                    obss, h_states, acts, rews, terminateds, lengths, ep_lengths
+                )
             )
 
             (
@@ -252,7 +254,7 @@ class PCL(ReinforcementLearner):
                 acts=acts.reshape(*sample_idxes.shape, -1),
                 rews=rews.reshape(*sample_idxes.shape, -1),
                 terminateds=terminateds.reshape(*sample_idxes.shape, -1),
-                lengths=lengths,
+                ep_lengths=ep_lengths,
             )
 
             self._model[POLICY], self._model[V] = policy, v

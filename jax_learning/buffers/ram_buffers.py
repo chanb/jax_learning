@@ -821,6 +821,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         dict,
         np.ndarray,
         np.ndarray,
+        np.ndarray,
     ]:
         assert (
             horizon_length >= 2
@@ -857,7 +858,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             terminateds,
             truncateds,
             infos,
-            _,
+            lengths,
         ) = self.get_transitions(sample_idxes.reshape(-1))
 
         ep_lengths = np.clip(
@@ -892,6 +893,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             terminateds,
             truncateds,
             infos,
+            lengths,
             ep_lengths,
             sample_idxes,
         )
