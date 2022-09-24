@@ -56,7 +56,7 @@ class PCL(ReinforcementLearner):
         self._horizon_length = getattr(cfg, HORIZON_LENGTH, 1) + 1
 
         _path_consistency_error = jax.vmap(
-            path_consistency_error, in_axes=[0, 0, 0, 0, None, None]
+            path_consistency_error, in_axes=[0, 0, 0, 0, 0, None, None]
         )
 
         @eqx.filter_grad(has_aux=True)
@@ -67,7 +67,8 @@ class PCL(ReinforcementLearner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            lengths: np.ndarray,
+            terminateds: np.ndarray,
+            traj_lengths: np.ndarray,
             keys: Sequence[jrandom.PRNGKey],
         ) -> Tuple[np.ndarray, dict]:
             (policy, v) = models
@@ -78,7 +79,13 @@ class PCL(ReinforcementLearner):
             temp = temperature()
 
             pcl_errors = _path_consistency_error(
-                lprobs, v_preds, rews[..., 0], lengths, temp, self._gamma
+                lprobs,
+                v_preds,
+                rews[..., 0],
+                terminateds,
+                traj_lengths - 1,
+                temp,
+                self._gamma,
             )
             loss = jnp.sum(jnp.mean(pcl_errors**2, axis=0))
             return loss, {
@@ -97,7 +104,8 @@ class PCL(ReinforcementLearner):
             h_states: np.ndarray,
             acts: np.ndarray,
             rews: np.ndarray,
-            lengths: np.ndarray,
+            terminateds: np.ndarray,
+            traj_lengths: np.ndarray,
         ) -> Tuple[
             StochasticPolicy,
             Value,
@@ -119,7 +127,8 @@ class PCL(ReinforcementLearner):
                 h_states,
                 acts,
                 rews,
-                lengths,
+                terminateds,
+                traj_lengths,
                 keys,
             )
             (policy_grads, v_grads) = grads
@@ -208,17 +217,21 @@ class PCL(ReinforcementLearner):
                 _,
                 _,
                 lengths,
+                traj_lengths,
                 sample_idxes,
             ) = self.buffer.sample(
                 batch_size=self._batch_size,
+                next_obs=next_obs,
                 horizon_length=self._horizon_length,
             )
 
             if self.obs_rms:
                 obss = self.obs_rms.normalize(obss)
 
-            (obss, h_states, acts, rews, terminateds, lengths) = to_jnp(
-                *batch_flatten(obss, h_states, acts, rews, terminateds, lengths)
+            (obss, h_states, acts, rews, terminateds, lengths, traj_lengths) = to_jnp(
+                *batch_flatten(
+                    obss, h_states, acts, rews, terminateds, lengths, traj_lengths
+                )
             )
 
             (
@@ -241,7 +254,8 @@ class PCL(ReinforcementLearner):
                 h_states=h_states.reshape(*sample_idxes.shape, -1),
                 acts=acts.reshape(*sample_idxes.shape, -1),
                 rews=rews.reshape(*sample_idxes.shape, -1),
-                lengths=lengths,
+                terminateds=terminateds.reshape(*sample_idxes.shape, -1),
+                traj_lengths=traj_lengths,
             )
 
             self._model[POLICY], self._model[V] = policy, v

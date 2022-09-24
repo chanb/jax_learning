@@ -155,7 +155,6 @@ class MLPSquashedGaussianPolicy(MLPGaussianPolicy):
         self, obs: np.ndarray, h_state: np.ndarray, act: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         act_pret = jnp.arctanh(act)
-        print(act, act_pret)
         act_mean, act_std = self.dist_params(obs, h_state)
         lprob = Normal.lprob(act_mean, act_std, act)
         lprob = lprob - TanhTransform.log_abs_det_jacobian(act_pret, act)
