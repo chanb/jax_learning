@@ -861,11 +861,11 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             lengths,
         ) = self.get_transitions(sample_idxes.reshape(-1))
 
-        ep_lengths = np.clip(
+        traj_lengths = np.clip(
             batch_episode_lengths - subtraj_start_idxes, a_min=0, a_max=horizon_length
         ).astype(np.int64)
         sample_mask = np.flip(
-            np.cumsum(np.eye(horizon_length)[horizon_length - ep_lengths], axis=-1),
+            np.cumsum(np.eye(horizon_length)[horizon_length - traj_lengths], axis=-1),
             axis=-1,
         )
         sample_idxes = sample_idxes * sample_mask - np.ones(sample_idxes.shape) * (
@@ -875,7 +875,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
 
         # If the episode ends too early, then the last observation should be in the trajectory
         # at index length_i of the trajectory.
-        for sample_i, (ep_i, length_i) in enumerate(zip(episode_idxes, ep_lengths)):
+        for sample_i, (ep_i, length_i) in enumerate(zip(episode_idxes, traj_lengths)):
             if length_i == horizon_length:
                 continue
             obss[sample_i * horizon_length + length_i] = (
@@ -894,6 +894,6 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             truncateds,
             infos,
             lengths,
-            ep_lengths,
+            traj_lengths,
             sample_idxes,
         )
