@@ -29,8 +29,9 @@ def get_keys(h5file):
     h5file.visititems(visitor)
     return keys
 
+
 data_dict = {}
-with h5py.File(os.path.join(base_h5path, f"{env}.hdf5"), 'r') as dataset_file:
+with h5py.File(os.path.join(base_h5path, f"{env}.hdf5"), "r") as dataset_file:
     for k in tqdm(get_keys(dataset_file), desc="load datafile"):
         try:  # first try loading as an array
             data_dict[k] = dataset_file[k][:]
@@ -54,7 +55,27 @@ buffer = NextStateNumPyBuffer(
     rng=buffer_rng,
 )
 
-h_state = np.array([0.])
-for (obs, act, rew, terminal, timeout, next_obs) in tqdm(zip(data_dict[OBSERVATIONS], data_dict[ACTIONS], data_dict[REWARDS], data_dict[TERMINALS], data_dict[TIMEOUTS], data_dict[NEXT_OBSERVATIONS]), desc="push data"):
-    buffer.push(obs=obs, h_state=h_state, act=act, rew=rew, terminated=terminal, truncated=timeout, info={}, next_obs=next_obs, next_h_state=h_state)
+h_state = np.array([0.0])
+for (obs, act, rew, terminal, timeout, next_obs) in tqdm(
+    zip(
+        data_dict[OBSERVATIONS],
+        data_dict[ACTIONS],
+        data_dict[REWARDS],
+        data_dict[TERMINALS],
+        data_dict[TIMEOUTS],
+        data_dict[NEXT_OBSERVATIONS],
+    ),
+    desc="push data",
+):
+    buffer.push(
+        obs=obs,
+        h_state=h_state,
+        act=act,
+        rew=rew,
+        terminated=terminal,
+        truncated=timeout,
+        info={},
+        next_obs=next_obs,
+        next_h_state=h_state,
+    )
 buffer.save(save_path=save_path, end_with_done=False)

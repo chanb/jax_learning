@@ -1,5 +1,4 @@
-from math import trunc
-from typing import Iterable, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 import _pickle as pickle
 import gzip
@@ -29,49 +28,54 @@ class NumPyBuffer(ReplayBuffer):
         checkpoint_path: Optional[str] = None,
         rng: np.random.RandomState = np.random.RandomState(),
         dtype: np.dtype = np.float32,
+        load_buffer: str = None,
     ):
-        self.rng = rng
-        self._buffer_size = buffer_size
-        self._dtype = dtype
-        self.observations = np.zeros(shape=(buffer_size, *obs_dim), dtype=dtype)
-        self.hidden_states = np.zeros(
-            shape=(buffer_size, *h_state_dim), dtype=np.float32
-        )
-        self.actions = np.zeros(shape=(buffer_size, *act_dim), dtype=np.float32)
-        self.rewards = np.zeros(shape=(buffer_size, *rew_dim), dtype=np.float32)
-        self.dones = np.zeros(shape=(buffer_size, 1), dtype=np.float32)
-        self.terminateds = np.zeros(shape=(buffer_size, 1), dtype=np.float32)
-        self.truncateds = np.zeros(shape=(buffer_size, 1), dtype=np.float32)
-        self.infos = dict()
-        for info_name, (info_shape, info_dtype) in infos.items():
-            self.infos[info_name] = np.zeros(
-                shape=(buffer_size, *info_shape), dtype=info_dtype
+        if load_buffer is not None:
+            self.load(load_buffer)
+        else:
+            self.rng = rng
+            self._buffer_size = buffer_size
+            self._dtype = dtype
+            self.observations = np.zeros(shape=(buffer_size, *obs_dim), dtype=dtype)
+            self.hidden_states = np.zeros(
+                shape=(buffer_size, *h_state_dim), dtype=np.float32
             )
+            self.actions = np.zeros(shape=(buffer_size, *act_dim), dtype=np.float32)
+            self.rewards = np.zeros(shape=(buffer_size, *rew_dim), dtype=np.float32)
+            self.dones = np.zeros(shape=(buffer_size, 1), dtype=np.float32)
+            self.terminateds = np.zeros(shape=(buffer_size, 1), dtype=np.float32)
+            self.truncateds = np.zeros(shape=(buffer_size, 1), dtype=np.float32)
+            self.infos = dict()
+            for info_name, (info_shape, info_dtype) in infos.items():
+                self.infos[info_name] = np.zeros(
+                    shape=(buffer_size, *info_shape), dtype=info_dtype
+                )
 
-        # This keeps track of the past X observations and hidden states for RNN
-        self.burn_in_window = burn_in_window
-        if burn_in_window > 0:
-            self.padding_first = padding_first
-            self.historic_observations = np.zeros(
-                shape=(burn_in_window, *obs_dim), dtype=dtype
-            )
-            self.historic_hidden_states = np.zeros(
-                shape=(burn_in_window, *h_state_dim), dtype=dtype
-            )
-            self.historic_dones = np.ones(shape=(burn_in_window, 1), dtype=np.float32)
+            # This keeps track of the past X observations and hidden states for RNN
+            self.burn_in_window = burn_in_window
+            if burn_in_window > 0:
+                self.padding_first = padding_first
+                self.historic_observations = np.zeros(
+                    shape=(burn_in_window, *obs_dim), dtype=dtype
+                )
+                self.historic_hidden_states = np.zeros(
+                    shape=(burn_in_window, *h_state_dim), dtype=dtype
+                )
+                self.historic_dones = np.ones(
+                    shape=(burn_in_window, 1), dtype=np.float32
+                )
+            self._pointer = 0
+            self._count = 0
 
         self._checkpoint_interval = checkpoint_interval
-        self._checkpoint_idxes = np.ones(shape=buffer_size, dtype=bool)
-        if checkpoint_path is not None and buffer_size >= checkpoint_interval > 0:
+        self._checkpoint_idxes = np.ones(shape=self._buffer_size, dtype=bool)
+        if checkpoint_path is not None and self._buffer_size >= checkpoint_interval > 0:
             self._checkpoint_path = checkpoint_path
             os.makedirs(checkpoint_path, exist_ok=True)
             self.checkpoint = self._checkpoint
             self._checkpoint_count = 0
         else:
             self.checkpoint = lambda: None
-
-        self._pointer = 0
-        self._count = 0
 
     @property
     def buffer_size(self):
@@ -482,6 +486,59 @@ class NumPyBuffer(ReplayBuffer):
         random_idxes = init_idxes[self.rng.randint(len(init_idxes), size=batch_size)]
         return self.observations[random_idxes], self.hidden_states[random_idxes]
 
+    def get_buffer_dict(self) -> Dict[str, Any]:
+        buffer_dict = {
+            c.OBSERVATIONS: self.observations,
+            c.HIDDEN_STATES: self.hidden_states,
+            c.ACTIONS: self.actions,
+            c.REWARDS: self.rewards,
+            c.DONES: self.dones,
+            c.TERMINATEDS: self.terminateds,
+            c.TRUNCATEDS: self.truncateds,
+            c.INFOS: self.infos,
+            c.BUFFER_SIZE: self._buffer_size,
+            c.DTYPE: self._dtype,
+            c.RNG: self.rng,
+            c.BURN_IN_WINDOW: {
+                c.BURN_IN_WINDOW: self.burn_in_window,
+            },
+        }
+        if self.burn_in_window > 0:
+            buffer_dict[c.BURN_IN_WINDOW][c.OBSERVATIONS] = self.historic_observations
+            buffer_dict[c.BURN_IN_WINDOW][c.HIDDEN_STATES] = self.historic_hidden_states
+            buffer_dict[c.BURN_IN_WINDOW][c.DONES] = self.historic_dones
+
+        return buffer_dict
+
+    def load_from_buffer_dict(self, buffer_dict: Dict[str, Any]):
+        self._buffer_size = buffer_dict[c.BUFFER_SIZE]
+        self.observations = buffer_dict[c.OBSERVATIONS]
+        self.hidden_states = buffer_dict[c.HIDDEN_STATES]
+        self.actions = buffer_dict[c.ACTIONS]
+        self.rewards = buffer_dict[c.REWARDS]
+        self.dones = buffer_dict[c.DONES]
+        self.terminateds = buffer_dict[c.TERMINATEDS]
+        self.truncateds = buffer_dict[c.TRUNCATEDS]
+        self.infos = buffer_dict[c.INFOS]
+
+        self._pointer = buffer_dict[c.POINTER]
+        self._count = buffer_dict[c.COUNT]
+
+        self._dtype = buffer_dict[c.DTYPE]
+        self.rng = buffer_dict[c.RNG]
+
+        if c.BURN_IN_WINDOW in buffer_dict:
+            self.burn_in_window = buffer_dict[c.BURN_IN_WINDOW][c.BURN_IN_WINDOW]
+
+            if self.burn_in_window > 0:
+                self.historic_observations = buffer_dict[c.BURN_IN_WINDOW][
+                    c.OBSERVATIONS
+                ]
+                self.historic_hidden_states = buffer_dict[c.BURN_IN_WINDOW][
+                    c.HIDDEN_STATES
+                ]
+                self.historic_dones = buffer_dict[c.BURN_IN_WINDOW][c.DONES]
+
     def save(self, save_path: str, end_with_done: bool = True, **kwargs):
         pointer = self._pointer
         count = self._count
@@ -500,45 +557,20 @@ class NumPyBuffer(ReplayBuffer):
                 pointer = (done_idxes[-1] + 1) % self._buffer_size
                 count -= self._pointer + self._buffer_size - pointer
 
+        buffer_dict = self.get_buffer_dict()
+        buffer_dict[c.POINTER] = pointer
+        buffer_dict[c.COUNT] = count
+
         with gzip.open(save_path, "wb") as f:
             pickle.dump(
-                {
-                    c.OBSERVATIONS: self.observations,
-                    c.HIDDEN_STATES: self.hidden_states,
-                    c.ACTIONS: self.actions,
-                    c.REWARDS: self.rewards,
-                    c.DONES: self.dones,
-                    c.TERMINATEDS: self.terminateds,
-                    c.TRUNCATEDS: self.truncateds,
-                    c.INFOS: self.infos,
-                    c.BUFFER_SIZE: self._buffer_size,
-                    c.POINTER: pointer,
-                    c.COUNT: count,
-                    c.DTYPE: self._dtype,
-                    c.RNG: self.rng,
-                },
+                buffer_dict,
                 f,
             )
 
     def load(self, load_path: str, **kwargs):
         with gzip.open(load_path, "rb") as f:
-            data = pickle.load(f)
-
-        self._buffer_size = data[c.BUFFER_SIZE]
-        self.observations = data[c.OBSERVATIONS]
-        self.hidden_states = data[c.HIDDEN_STATES]
-        self.actions = data[c.ACTIONS]
-        self.rewards = data[c.REWARDS]
-        self.dones = data[c.DONES]
-        self.terminateds = data[c.TERMINATEDS]
-        self.truncateds = data[c.TRUNCATEDS]
-        self.infos = data[c.INFOS]
-
-        self._pointer = data[c.POINTER]
-        self._count = data[c.COUNT]
-
-        self._dtype = data[c.DTYPE]
-        self.rng = data[c.RNG]
+            buffer_dict = pickle.load(f)
+        self.load_from_buffer_dict(buffer_dict)
 
 
 class NextStateNumPyBuffer(NumPyBuffer):
@@ -556,6 +588,7 @@ class NextStateNumPyBuffer(NumPyBuffer):
         checkpoint_path: Optional[str] = None,
         rng: np.random.RandomState = np.random.RandomState(),
         dtype: np.dtype = np.float32,
+        load_buffer: str = None,
     ):
         super().__init__(
             buffer_size=buffer_size,
@@ -570,6 +603,7 @@ class NextStateNumPyBuffer(NumPyBuffer):
             checkpoint_path=checkpoint_path,
             rng=rng,
             dtype=dtype,
+            load_buffer=load_buffer,
         )
         self.next_observations = self.observations.copy()
         self.next_hidden_states = self.hidden_states.copy()
@@ -686,49 +720,26 @@ class NextStateNumPyBuffer(NumPyBuffer):
                 pointer = (done_idxes[-1] + 1) % self._buffer_size
                 count -= self._pointer + self._buffer_size - pointer
 
+        buffer_dict = self.get_buffer_dict()
+        buffer_dict[c.POINTER] = pointer
+        buffer_dict[c.COUNT] = count
+        buffer_dict[c.NEXT_OBSERVATIONS] = self.next_observations
+        buffer_dict[c.NEXT_HIDDEN_STATES] = self.next_hidden_states
+
         with gzip.open(save_path, "wb") as f:
             pickle.dump(
-                {
-                    c.OBSERVATIONS: self.observations,
-                    c.HIDDEN_STATES: self.hidden_states,
-                    c.ACTIONS: self.actions,
-                    c.REWARDS: self.rewards,
-                    c.DONES: self.dones,
-                    c.TERMINATEDS: self.terminateds,
-                    c.TRUNCATEDS: self.truncateds,
-                    c.NEXT_OBSERVATIONS: self.next_observations,
-                    c.NEXT_HIDDEN_STATES: self.next_hidden_states,
-                    c.INFOS: self.infos,
-                    c.BUFFER_SIZE: self._buffer_size,
-                    c.POINTER: pointer,
-                    c.COUNT: count,
-                    c.DTYPE: self._dtype,
-                    c.RNG: self.rng,
-                },
+                buffer_dict,
                 f,
             )
 
     def load(self, load_path: str, **kwargs):
         with gzip.open(load_path, "rb") as f:
-            data = pickle.load(f)
+            buffer_dict = pickle.load(f)
 
-        self._buffer_size = data[c.BUFFER_SIZE]
-        self.observations = data[c.OBSERVATIONS]
-        self.hidden_states = data[c.HIDDEN_STATES]
-        self.next_observations = data[c.NEXT_OBSERVATIONS]
-        self.next_hidden_states = data[c.NEXT_HIDDEN_STATES]
-        self.actions = data[c.ACTIONS]
-        self.rewards = data[c.REWARDS]
-        self.dones = data[c.DONES]
-        self.terminateds = data[c.TERMINATEDS]
-        self.truncateds = data[c.TRUNCATEDS]
-        self.infos = data[c.INFOS]
+        self.load_from_buffer_dict(buffer_dict)
 
-        self._pointer = data[c.POINTER]
-        self._count = data[c.COUNT]
-
-        self._dtype = data[c.DTYPE]
-        self.rng = data[c.RNG]
+        self.next_observations = buffer_dict[c.NEXT_OBSERVATIONS]
+        self.next_hidden_states = buffer_dict[c.NEXT_HIDDEN_STATES]
 
 
 class TrajectoryNumPyBuffer(NumPyBuffer):
@@ -916,50 +927,26 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
                 pointer = (self._episode_start_idxes[-1]) % self._buffer_size
                 count -= self._pointer + self._buffer_size - pointer
 
+        buffer_dict = self.get_buffer_dict()
+        buffer_dict[c.POINTER] = pointer
+        buffer_dict[c.COUNT] = count
+        buffer_dict[c.LAST_OBSERVATIONS] = self._last_observations
+        buffer_dict[c.EPISODE_LENGTHS] = self._episode_lengths
+        buffer_dict[c.EPISODE_START_IDXES] = self._episode_start_idxes
+        buffer_dict[c.CURR_EPISODE_LENGTH] = self._curr_episode_length
+
         with gzip.open(save_path, "wb") as f:
             pickle.dump(
-                {
-                    c.OBSERVATIONS: self.observations,
-                    c.HIDDEN_STATES: self.hidden_states,
-                    c.ACTIONS: self.actions,
-                    c.REWARDS: self.rewards,
-                    c.DONES: self.dones,
-                    c.TERMINATEDS: self.terminateds,
-                    c.TRUNCATEDS: self.truncateds,
-                    c.LAST_OBSERVATIONS: self._last_observations,
-                    c.EPISODE_LENGTHS: self._episode_lengths,
-                    c.EPISODE_START_IDXES: self._episode_start_idxes,
-                    c.CURR_EPISODE_LENGTH: self._curr_episode_length,
-                    c.INFOS: self.infos,
-                    c.BUFFER_SIZE: self._buffer_size,
-                    c.POINTER: pointer,
-                    c.COUNT: count,
-                    c.DTYPE: self._dtype,
-                    c.RNG: self.rng,
-                },
+                buffer_dict,
                 f,
             )
 
     def load(self, load_path: str, **kwargs):
         with gzip.open(load_path, "rb") as f:
-            data = pickle.load(f)
+            buffer_dict = pickle.load(f)
 
-        self._buffer_size = data[c.BUFFER_SIZE]
-        self.observations = data[c.OBSERVATIONS]
-        self.hidden_states = data[c.HIDDEN_STATES]
-        self._curr_episode_length = data[c.CURR_EPISODE_LENGTH]
-        self._last_observations = data[c.LAST_OBSERVATIONS]
-        self._episode_lengths = data[c.EPISODE_LENGTHS]
-        self._episode_start_idxes = data[c.EPISODE_START_IDXES]
-        self.actions = data[c.ACTIONS]
-        self.rewards = data[c.REWARDS]
-        self.dones = data[c.DONES]
-        self.terminateds = data[c.TERMINATEDS]
-        self.truncateds = data[c.TRUNCATEDS]
-        self.infos = data[c.INFOS]
-
-        self._pointer = data[c.POINTER]
-        self._count = data[c.COUNT]
-
-        self._dtype = data[c.DTYPE]
-        self.rng = data[c.RNG]
+        self.load_from_buffer_dict(buffer_dict)
+        self._curr_episode_length = buffer_dict[c.CURR_EPISODE_LENGTH]
+        self._last_observations = buffer_dict[c.LAST_OBSERVATIONS]
+        self._episode_lengths = buffer_dict[c.EPISODE_LENGTHS]
+        self._episode_start_idxes = buffer_dict[c.EPISODE_START_IDXES]

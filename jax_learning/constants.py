@@ -15,6 +15,7 @@ POINTER = "pointer"
 COUNT = "count"
 DTYPE = "dtype"
 RNG = "rng"
+BURN_IN_WINDOW = "burn_in_window"
 
 CURR_EPISODE_LENGTH = "curr_episode_length"
 EPISODE = "episode"

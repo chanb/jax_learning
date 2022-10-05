@@ -32,6 +32,8 @@ class BC(ReinforcementLearner):
     ):
         super().__init__(model, opt, buffer, cfg)
 
+        self._batch_size = cfg.batch_size
+
         @eqx.filter_grad(has_aux=True)
         @eqx.filter_jit()
         def compute_loss(
@@ -72,7 +74,7 @@ class BC(ReinforcementLearner):
         self._step += 1
 
         obss, h_states, acts_e, _, _, _, _, _, _, _ = self.buffer.sample(
-            batch_size=self._update_frequency, idxes=self._sample_idxes
+            batch_size=self._batch_size,
         )
         if self.obs_rms:
             obss = self.obs_rms.normalize(obss)
