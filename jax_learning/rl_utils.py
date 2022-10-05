@@ -113,7 +113,10 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
 
         if checkpoint_frequency and (timestep_i + 1) % checkpoint_frequency == 0:
             agent_dict = agent.checkpoint()
-            pickle.dump(open(checkpoint_path, "wb"), agent_dict)
+            pickle.dump(
+                agent_dict,
+                open(os.path.join(checkpoint_path, f"{timestep_i + 1}.pkl"), "wb"),
+            )
 
         metrics_batch.append(timestep_dict)
         if (timestep_i + 1) % log_interval == 0:
