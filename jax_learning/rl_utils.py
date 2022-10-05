@@ -150,7 +150,7 @@ def evaluate(
     timestep_i = 0
     ep_lengths = []
     ep_returns = []
-    for _ in range(num_episodes):
+    for i in range(num_episodes):
         obs, info = env.reset(seed=env_rng.randint(0, sys.maxsize))
         h_state = agent.reset()
         ep_return = 0.0
@@ -173,8 +173,5 @@ def evaluate(
                 ep_lengths.append(ep_length)
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODIC_RETURN}"] = np.mean(ep_returns)
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}"] = np.mean(ep_lengths)
-
-    epoch_summary.log(
-        f"{w.EVALUATION}/mean_{c.EPISODIC_RETURN}", np.mean(ep_returns), axis=0
-    )
-    epoch_summary.log(f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}", np.mean(ep_lengths))
+    epoch_summary.log(f"{w.EVALUATION}/{c.EPISODIC_RETURN}", ep_returns)
+    epoch_summary.log(f"{w.EVALUATION}/{c.EPISODE_LENGTH}", ep_lengths)
