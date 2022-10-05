@@ -1,10 +1,13 @@
+import _pickle as pickle
 import copy
+import os
 import numpy as np
 import sys
 import timeit
 import wandb
 
 from argparse import Namespace
+from datetime import datetime
 from typing import Sequence, Callable, Any, Union
 
 import jax_learning.constants as c
@@ -41,6 +44,16 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     env_rng = cfg.env_rng
     evaluation_frequency = cfg.evaluation_frequency
     evaluation_env = copy.deepcopy(env)
+    checkpoint_frequency = cfg.checkpoint_frequency
+    save_path = cfg.save_path
+
+    if checkpoint_frequency:
+        time_tag = datetime.strftime(datetime.now(), "%m-%d-%y_%H_%M_%S")
+        if save_path is None:
+            save_path = "unnamed_run"
+        save_path = f"{save_path}/{time_tag}"
+        checkpoint_path = os.path.join(save_path, "checkpoints")
+        os.makedirs(checkpoint_path, exist_ok=True)
 
     random_exploration = getattr(cfg, c.RANDOM_EXPLORATION, None)
     num_exploration = getattr(cfg, c.EXPLORATION_STEPS, 0)
@@ -96,6 +109,13 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         if evaluation_frequency and (timestep_i + 1) % evaluation_frequency == 0:
             evaluate(
                 evaluation_env, agent, cfg.evaluation_cfg, timestep_dict, epoch_summary
+            )
+
+        if checkpoint_frequency and (timestep_i + 1) % checkpoint_frequency == 0:
+            agent_dict = agent.checkpoint()
+            pickle.dump(
+                open(checkpoint_path, "wb"),
+                agent_dict
             )
 
         metrics_batch.append(timestep_dict)

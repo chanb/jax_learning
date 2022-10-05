@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Tuple
+from typing import Tuple, Any, Dict
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.common import EpochSummary
@@ -102,3 +102,6 @@ class LearningAgent(Agent):
         epoch_summary: EpochSummary,
     ):
         self.learner.learn(next_obs, next_h_state, learn_info, epoch_summary)
+
+    def checkpoint(self) -> Dict[str, Any]:
+        return self._learner.checkpoint()

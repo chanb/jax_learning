@@ -897,3 +897,69 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             traj_lengths,
             sample_idxes,
         )
+
+    def save(self, save_path: str, end_with_done: bool = True, **kwargs):
+        pointer = self._pointer
+        count = self._count
+
+        if end_with_done:
+            done_idxes = np.where(self.dones == 1)[0]
+            if len(done_idxes) == 0:
+                print("No completed episodes. Nothing to save.")
+                return
+
+            wraparound_idxes = done_idxes[self._episode_start_idxes[-1] < self._pointer]
+            if len(wraparound_idxes) > 0:
+                pointer = (wraparound_idxes[-1]) % self._buffer_size
+                count -= self._pointer - pointer
+            else:
+                pointer = (self._episode_start_idxes[-1]) % self._buffer_size
+                count -= self._pointer + self._buffer_size - pointer
+
+        with gzip.open(save_path, "wb") as f:
+            pickle.dump(
+                {
+                    c.OBSERVATIONS: self.observations,
+                    c.HIDDEN_STATES: self.hidden_states,
+                    c.ACTIONS: self.actions,
+                    c.REWARDS: self.rewards,
+                    c.DONES: self.dones,
+                    c.TERMINATEDS: self.terminateds,
+                    c.TRUNCATEDS: self.truncateds,
+                    c.LAST_OBSERVATIONS: self._last_observations,
+                    c.EPISODE_LENGTHS: self._episode_lengths,
+                    c.EPISODE_START_IDXES: self._episode_start_idxes,
+                    c.CURR_EPISODE_LENGTH: self._curr_episode_length,
+                    c.INFOS: self.infos,
+                    c.BUFFER_SIZE: self._buffer_size,
+                    c.POINTER: pointer,
+                    c.COUNT: count,
+                    c.DTYPE: self._dtype,
+                    c.RNG: self.rng,
+                },
+                f,
+            )
+
+    def load(self, load_path: str, **kwargs):
+        with gzip.open(load_path, "rb") as f:
+            data = pickle.load(f)
+
+        self._buffer_size = data[c.BUFFER_SIZE]
+        self.observations = data[c.OBSERVATIONS]
+        self.hidden_states = data[c.HIDDEN_STATES]
+        self._curr_episode_length = data[c.CURR_EPISODE_LENGTH]
+        self._last_observations = data[c.LAST_OBSERVATIONS]
+        self._episode_lengths = data[c.EPISODE_LENGTHS]
+        self._episode_start_idxes = data[c.EPISODE_START_IDXES]
+        self.actions = data[c.ACTIONS]
+        self.rewards = data[c.REWARDS]
+        self.dones = data[c.DONES]
+        self.terminateds = data[c.TERMINATEDS]
+        self.truncateds = data[c.TRUNCATEDS]
+        self.infos = data[c.INFOS]
+
+        self._pointer = data[c.POINTER]
+        self._count = data[c.COUNT]
+
+        self._dtype = data[c.DTYPE]
+        self.rng = data[c.RNG]

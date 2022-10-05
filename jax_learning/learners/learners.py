@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from argparse import Namespace
-from typing import Dict
+from typing import Any, Dict
 
 import equinox as eqx
 import jax
@@ -10,6 +10,13 @@ import optax
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.common import EpochSummary, RunningMeanStd, polyak_average_generator
 from jax_learning.constants import NORMALIZE_OBS, NORMALIZE_VALUE
+
+MODEL = "model"
+OPT = "opt"
+OPT_STATE = "opt_state"
+OBS_RMS = "obs_rms"
+VAL_RMS = "val_rms"
+TARGET_MODEL = "target_model"
 
 
 class ReinforcementLearner:
@@ -78,6 +85,17 @@ class ReinforcementLearner:
     ):
         raise NotImplementedError
 
+    def checkpoint(
+        self,
+    ) -> Dict[str, Any]:
+        return {
+            MODEL: self.model,
+            OPT: self.opt,
+            OPT_STATE: self.opt_state,
+            OBS_RMS: self.obs_rms,
+            VAL_RMS: self.val_rms,
+        }
+
 
 class ReinforcementLearnerWithTargetNetwork(ReinforcementLearner):
     def __init__(
@@ -102,3 +120,10 @@ class ReinforcementLearnerWithTargetNetwork(ReinforcementLearner):
         self._target_model[model_key] = jax.tree_map(
             self.polyak_average, self.model[model_key], self.target_model[model_key]
         )
+
+    def checkpoint(
+        self,
+    ) -> Dict[str, Any]:
+        checkpoint_dict = super().checkpoint()
+        checkpoint_dict[TARGET_MODEL] = self.target_model
+        return checkpoint_dict
