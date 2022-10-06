@@ -90,7 +90,6 @@ class ReinforcementLearner:
     ) -> Dict[str, Any]:
         return {
             MODEL: self.model,
-            OPT: self.opt,
             OPT_STATE: self.opt_state,
             OBS_RMS: self.obs_rms,
             VAL_RMS: self.val_rms,

@@ -1,4 +1,3 @@
-import _pickle as pickle
 import copy
 import os
 import numpy as np
@@ -14,7 +13,7 @@ import jax_learning.constants as c
 import jax_learning.wandb_constants as w
 
 from jax_learning.agents import Agent
-from jax_learning.common import EpochSummary
+from jax_learning.common import EpochSummary, save_dict
 
 
 def random_exploration_generator(
@@ -113,10 +112,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
 
         if checkpoint_frequency and (timestep_i + 1) % checkpoint_frequency == 0:
             agent_dict = agent.checkpoint()
-            pickle.dump(
-                agent_dict,
-                open(os.path.join(checkpoint_path, f"{timestep_i + 1}.pkl"), "wb"),
-            )
+            save_dict(checkpoint_path, f"timestep_{timestep_i + 1}", agent_dict)
 
         metrics_batch.append(timestep_dict)
         if (timestep_i + 1) % log_interval == 0:

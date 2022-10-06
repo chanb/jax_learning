@@ -175,4 +175,5 @@ class EpsilonGreedyAgent(RLAgent):
         agent_dict[EPS] = self._eps
         agent_dict[EPS_DECAY] = self._eps_decay
         agent_dict[MIN_EPS] = self._min_eps
+        agent_dict[AGENT_KEY] = self._key
         return agent_dict

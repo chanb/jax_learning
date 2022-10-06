@@ -1,6 +1,10 @@
-from typing import Sequence, Callable, Any
+from typing import Sequence, Callable, Any, Dict
 
+import _pickle as pickle
+import equinox as eqx
+import jax
 import numpy as np
+import os
 import timeit
 import wandb
 
@@ -20,6 +24,22 @@ def polyak_average_generator(
         return x * p + (1 - x) * q
 
     return polyak_average
+
+
+def save_dict(save_path: str, file_prefix: str, data: Dict[str, Any]):
+    base_path = os.path.join(save_path, file_prefix)
+    os.makedirs(base_path, exist_ok=True)
+
+    pkl_data = {}
+    for key, val in data.items():
+        if isinstance(val, eqx.Module):
+            eqx.tree_serialise_leaves(os.path.join(base_path, f"{key}-chkpt.eqx"), val)
+        elif isinstance(val, dict):
+            save_dict(base_path, key, val)
+        else:
+            pkl_data[key] = val
+    if len(pkl_data):
+        pickle.dump(data, open(os.path.join(base_path, f"{file_prefix}-chkpt.pkl"), "wb"))
 
 
 class RunningMeanStd:
