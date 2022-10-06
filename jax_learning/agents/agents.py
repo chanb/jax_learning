@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from typing import Tuple, Any, Dict
 
 from jax_learning.buffers import ReplayBuffer
-from jax_learning.common import EpochSummary
+from jax_learning.common import EpochSummary, load_checkpoint
 from jax_learning.constants import RESET, LEARNER
 from jax_learning.learners import ReinforcementLearner
 
@@ -107,6 +107,8 @@ class LearningAgent(Agent):
         self.learner.learn(next_obs, next_h_state, learn_info, epoch_summary)
 
     def checkpoint(self) -> Dict[str, Any]:
-        return {
-            LEARNER: self._learner.checkpoint()
-        }
+        return {LEARNER: self._learner.checkpoint()}
+
+    def load(self, load_path: str):
+        agent_dict = load_checkpoint(load_path)
+        self._learner.load(agent_dict[LEARNER])

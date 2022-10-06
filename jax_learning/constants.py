@@ -10,6 +10,7 @@ NEXT_OBSERVATIONS = "next_observations"
 NEXT_HIDDEN_STATES = "next_hidden_states"
 LAST_OBSERVATIONS = "last_observations"
 
+AGENT = "agent"
 LEARNER = "learner"
 
 BUFFER_SIZE = "buffer_size"

@@ -6,7 +6,8 @@ import numpy as np
 
 from jax_learning.agents import LearningAgent
 from jax_learning.buffers import ReplayBuffer
-from jax_learning.constants import EXPLORATION_STRATEGY, CONTINUOUS, DISCRETE
+from jax_learning.common import load_checkpoint
+from jax_learning.constants import EXPLORATION_STRATEGY, CONTINUOUS, DISCRETE, LEARNER
 from jax_learning.learners import ReinforcementLearner
 
 AGENT_KEY = "agent_key"
@@ -64,6 +65,11 @@ class RLAgent(LearningAgent):
         agent_dict = super().checkpoint()
         agent_dict[AGENT_KEY] = self._key
         return agent_dict
+
+    def load(self, load_path: str):
+        agent_dict = load_checkpoint(load_path)
+        self._key = agent_dict[AGENT_KEY]
+        self._learner.load(agent_dict[LEARNER])
 
 
 class EpsilonGreedyAgent(RLAgent):
@@ -171,9 +177,18 @@ class EpsilonGreedyAgent(RLAgent):
 
     def checkpoint(self) -> Dict[str, Any]:
         agent_dict = super().checkpoint()
-        agent_dict[EPS_WARMUP] = self._eps_warmup
         agent_dict[EPS] = self._eps
         agent_dict[EPS_DECAY] = self._eps_decay
+        agent_dict[EPS_WARMUP] = self._eps_warmup
         agent_dict[MIN_EPS] = self._min_eps
         agent_dict[AGENT_KEY] = self._key
         return agent_dict
+
+    def load(self, load_path: str):
+        agent_dict = load_checkpoint(load_path)
+        self._key = agent_dict[AGENT_KEY]
+        self._eps = agent_dict[EPS]
+        self._eps_decay = agent_dict[EPS_DECAY]
+        self._eps_warmup = agent_dict[EPS_WARMUP]
+        self._min_eps = agent_dict[MIN_EPS]
+        self._learner.load(agent_dict[LEARNER])
