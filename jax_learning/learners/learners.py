@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from argparse import Namespace
-from typing import Dict
+from typing import Any, Dict
 
 import equinox as eqx
 import jax
@@ -9,7 +9,14 @@ import optax
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.common import EpochSummary, RunningMeanStd, polyak_average_generator
-from jax_learning.constants import NORMALIZE_OBS, NORMALIZE_VALUE
+from jax_learning.constants import LEARNER, NORMALIZE_OBS, NORMALIZE_VALUE
+
+MODEL = "model"
+OPT = "opt"
+OPT_STATE = "opt_state"
+OBS_RMS = "obs_rms"
+VAL_RMS = "val_rms"
+TARGET_MODEL = "target_model"
 
 
 class ReinforcementLearner:
@@ -78,6 +85,25 @@ class ReinforcementLearner:
     ):
         raise NotImplementedError
 
+    def checkpoint(
+        self,
+    ) -> Dict[str, Any]:
+        return {
+            MODEL: self.model,
+            OPT_STATE: self.opt_state,
+            OBS_RMS: self.obs_rms,
+            VAL_RMS: self.val_rms,
+        }
+
+    def load(self, data: Dict[str, Any]):
+        self._obs_rms = data[OBS_RMS]
+        self._val_rms = data[VAL_RMS]
+        self._opt_state = data[OPT_STATE]
+        for model_key, model_filename in data[MODEL].items():
+            self.model[model_key] = eqx.tree_deserialise_leaves(
+                model_filename, self.model[model_key]
+            )
+
 
 class ReinforcementLearnerWithTargetNetwork(ReinforcementLearner):
     def __init__(
@@ -102,3 +128,17 @@ class ReinforcementLearnerWithTargetNetwork(ReinforcementLearner):
         self._target_model[model_key] = jax.tree_map(
             self.polyak_average, self.model[model_key], self.target_model[model_key]
         )
+
+    def checkpoint(
+        self,
+    ) -> Dict[str, Any]:
+        checkpoint_dict = super().checkpoint()
+        checkpoint_dict[TARGET_MODEL] = self.target_model
+        return checkpoint_dict
+
+    def load(self, data: Dict[str, Any]):
+        super().load(data)
+        for model_key, model_filename in data[TARGET_MODEL].items():
+            self.target_model[model_key] = eqx.tree_deserialise_leaves(
+                model_filename, self.target_model[model_key]
+            )

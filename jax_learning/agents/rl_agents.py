@@ -1,4 +1,4 @@
-from typing import Tuple, Dict
+from typing import Any, Tuple, Dict
 
 import equinox as eqx
 import jax.random as jrandom
@@ -6,8 +6,15 @@ import numpy as np
 
 from jax_learning.agents import LearningAgent
 from jax_learning.buffers import ReplayBuffer
-from jax_learning.constants import EXPLORATION_STRATEGY, CONTINUOUS, DISCRETE
+from jax_learning.common import load_checkpoint
+from jax_learning.constants import EXPLORATION_STRATEGY, CONTINUOUS, DISCRETE, LEARNER
 from jax_learning.learners import ReinforcementLearner
+
+AGENT_KEY = "agent_key"
+EPS = "eps"
+EPS_WARMUP = "eps_warmup"
+EPS_DECAY = "eps_decay"
+MIN_EPS = "min_eps"
 
 
 class RLAgent(LearningAgent):
@@ -53,6 +60,16 @@ class RLAgent(LearningAgent):
             self._key = new_key
 
         return np.asarray(action), np.asarray(next_h_state)
+
+    def checkpoint(self) -> Dict[str, Any]:
+        agent_dict = super().checkpoint()
+        agent_dict[AGENT_KEY] = self._key
+        return agent_dict
+
+    def load(self, load_path: str):
+        agent_dict = load_checkpoint(load_path)
+        self._key = agent_dict[AGENT_KEY]
+        self._learner.load(agent_dict[LEARNER])
 
 
 class EpsilonGreedyAgent(RLAgent):
@@ -157,3 +174,21 @@ class EpsilonGreedyAgent(RLAgent):
                 self._eps = max(self._eps * self._eps_decay, self._min_eps)
 
         return np.asarray(action), np.asarray(next_h_state)
+
+    def checkpoint(self) -> Dict[str, Any]:
+        agent_dict = super().checkpoint()
+        agent_dict[EPS] = self._eps
+        agent_dict[EPS_DECAY] = self._eps_decay
+        agent_dict[EPS_WARMUP] = self._eps_warmup
+        agent_dict[MIN_EPS] = self._min_eps
+        agent_dict[AGENT_KEY] = self._key
+        return agent_dict
+
+    def load(self, load_path: str):
+        agent_dict = load_checkpoint(load_path)
+        self._key = agent_dict[AGENT_KEY]
+        self._eps = agent_dict[EPS]
+        self._eps_decay = agent_dict[EPS_DECAY]
+        self._eps_warmup = agent_dict[EPS_WARMUP]
+        self._min_eps = agent_dict[MIN_EPS]
+        self._learner.load(agent_dict[LEARNER])

@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Tuple
+from typing import Tuple, Any, Dict
 
 from jax_learning.buffers import ReplayBuffer
-from jax_learning.common import EpochSummary
-from jax_learning.constants import RESET
+from jax_learning.common import EpochSummary, load_checkpoint
+from jax_learning.constants import RESET, LEARNER
 from jax_learning.learners import ReinforcementLearner
 
 import equinox as eqx
@@ -63,6 +63,9 @@ class Agent(ABC):
             return self.model.reset()
         return np.array([0.0], dtype=np.float32)
 
+    def checkpoint(self) -> Dict[str, Any]:
+        return {}
+
 
 class LearningAgent(Agent):
     def __init__(
@@ -102,3 +105,10 @@ class LearningAgent(Agent):
         epoch_summary: EpochSummary,
     ):
         self.learner.learn(next_obs, next_h_state, learn_info, epoch_summary)
+
+    def checkpoint(self) -> Dict[str, Any]:
+        return {LEARNER: self._learner.checkpoint()}
+
+    def load(self, load_path: str):
+        agent_dict = load_checkpoint(load_path)
+        self._learner.load(agent_dict[LEARNER])

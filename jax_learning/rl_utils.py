@@ -1,17 +1,19 @@
 import copy
+import os
 import numpy as np
 import sys
 import timeit
 import wandb
 
 from argparse import Namespace
+from datetime import datetime
 from typing import Sequence, Callable, Any, Union
 
 import jax_learning.constants as c
 import jax_learning.wandb_constants as w
 
 from jax_learning.agents import Agent
-from jax_learning.common import EpochSummary
+from jax_learning.common import EpochSummary, save_checkpoint
 
 
 def random_exploration_generator(
@@ -41,6 +43,16 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     env_rng = cfg.env_rng
     evaluation_frequency = cfg.evaluation_frequency
     evaluation_env = copy.deepcopy(env)
+    checkpoint_frequency = cfg.checkpoint_frequency
+    save_path = cfg.save_path
+
+    if checkpoint_frequency:
+        time_tag = datetime.strftime(datetime.now(), "%m-%d-%y_%H_%M_%S")
+        if save_path is None:
+            save_path = "unnamed_run"
+        save_path = f"{save_path}/{time_tag}"
+        checkpoint_path = os.path.join(save_path, "checkpoints")
+        os.makedirs(checkpoint_path, exist_ok=True)
 
     random_exploration = getattr(cfg, c.RANDOM_EXPLORATION, None)
     num_exploration = getattr(cfg, c.EXPLORATION_STEPS, 0)
@@ -98,6 +110,14 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
                 evaluation_env, agent, cfg.evaluation_cfg, timestep_dict, epoch_summary
             )
 
+        if checkpoint_frequency and (timestep_i + 1) % checkpoint_frequency == 0:
+            agent_dict = agent.checkpoint()
+            save_checkpoint(
+                os.path.join(checkpoint_path, f"timestep_{timestep_i + 1}"),
+                c.AGENT,
+                agent_dict,
+            )
+
         metrics_batch.append(timestep_dict)
         if (timestep_i + 1) % log_interval == 0:
             epoch_summary.print_summary()
@@ -133,7 +153,7 @@ def evaluate(
     timestep_i = 0
     ep_lengths = []
     ep_returns = []
-    for _ in range(num_episodes):
+    for i in range(num_episodes):
         obs, info = env.reset(seed=env_rng.randint(0, sys.maxsize))
         h_state = agent.reset()
         ep_return = 0.0
@@ -156,8 +176,5 @@ def evaluate(
                 ep_lengths.append(ep_length)
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODIC_RETURN}"] = np.mean(ep_returns)
     timestep_dict[f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}"] = np.mean(ep_lengths)
-
-    epoch_summary.log(
-        f"{w.EVALUATION}/mean_{c.EPISODIC_RETURN}", np.mean(ep_returns), axis=0
-    )
-    epoch_summary.log(f"{w.EVALUATION}/mean_{c.EPISODE_LENGTH}", np.mean(ep_lengths))
+    epoch_summary.log(f"{w.EVALUATION}/{c.EPISODIC_RETURN}", ep_returns)
+    epoch_summary.log(f"{w.EVALUATION}/{c.EPISODE_LENGTH}", ep_lengths)

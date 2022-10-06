@@ -1,6 +1,9 @@
-from typing import Sequence, Callable, Any
+from typing import Sequence, Callable, Any, Dict
 
+import _pickle as pickle
+import equinox as eqx
 import numpy as np
+import os
 import timeit
 import wandb
 
@@ -20,6 +23,44 @@ def polyak_average_generator(
         return x * p + (1 - x) * q
 
     return polyak_average
+
+
+def save_checkpoint(save_path: str, file_prefix: str, data: Dict[str, Any]):
+    base_path = os.path.join(save_path, file_prefix)
+    os.makedirs(base_path, exist_ok=True)
+
+    pkl_data = {}
+    for key, val in data.items():
+        if isinstance(val, eqx.Module):
+            eqx.tree_serialise_leaves(os.path.join(base_path, f"{key}-chkpt.eqx"), val)
+        elif isinstance(val, dict):
+            save_checkpoint(base_path, key, val)
+        else:
+            pkl_data[key] = val
+    if len(pkl_data):
+        pickle.dump(
+            pkl_data, open(os.path.join(base_path, f"{file_prefix}-chkpt.pkl"), "wb")
+        )
+
+
+def load_checkpoint(load_path: str) -> Dict[str, Any]:
+    data = {}
+    for filename in os.listdir(load_path):
+        complete_filename = os.path.join(load_path, filename)
+        print(complete_filename)
+        if os.path.isdir(complete_filename):
+            data[filename] = load_checkpoint(complete_filename)
+        else:
+            key = os.path.basename(filename).split("-chkpt")[0]
+            ext = os.path.basename(filename).split(".")[-1]
+            if ext == "pkl":
+                data.update(pickle.load(open(complete_filename, "rb")))
+            elif ext == "eqx":
+                data[key] = complete_filename
+            else:
+                print(f"Unsupported file extension: {ext} for file {complete_filename}")
+                raise NotImplementedError
+    return data
 
 
 class RunningMeanStd:
