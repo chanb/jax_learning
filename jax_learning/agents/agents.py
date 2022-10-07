@@ -4,7 +4,7 @@ from typing import Tuple, Any, Dict
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.common import EpochSummary, load_checkpoint
 from jax_learning.constants import RESET, LEARNER
-from jax_learning.learners import ReinforcementLearner
+from jax_learning.learners import Learner
 
 import equinox as eqx
 import numpy as np
@@ -39,7 +39,10 @@ class Agent(ABC):
     ) -> Tuple[np.ndarray, np.ndarray]:
         raise NotImplementedError
 
-    def learn(self, next_obs: np.ndarray, next_h_state: np.ndarray, learn_info: dict):
+    def pretrain(self, learn_info: dict, epoch_summary: EpochSummary, **kwargs):
+        pass
+
+    def learn(self, learn_info: dict, epoch_summary: EpochSummary, **kwargs):
         pass
 
     def store(
@@ -68,9 +71,7 @@ class Agent(ABC):
 
 
 class LearningAgent(Agent):
-    def __init__(
-        self, model: eqx.Module, buffer: ReplayBuffer, learner: ReinforcementLearner
-    ):
+    def __init__(self, model: eqx.Module, buffer: ReplayBuffer, learner: Learner):
         super().__init__(model, buffer)
         self._learner = learner
         self._obs_rms = learner.obs_rms
@@ -78,6 +79,10 @@ class LearningAgent(Agent):
     @property
     def learner(self):
         return self._learner
+
+    @learner.setter
+    def learner(self, learner):
+        self._learner = learner
 
     def store(
         self,
@@ -97,14 +102,8 @@ class LearningAgent(Agent):
             obs, h_state, act, rew, terminated, truncated, info, next_obs, next_h_state
         )
 
-    def learn(
-        self,
-        next_obs: np.ndarray,
-        next_h_state: np.ndarray,
-        learn_info: dict,
-        epoch_summary: EpochSummary,
-    ):
-        self.learner.learn(next_obs, next_h_state, learn_info, epoch_summary)
+    def learn(self, learn_info: dict, epoch_summary: EpochSummary, **kwargs):
+        self.learner.learn(learn_info, epoch_summary, **kwargs)
 
     def checkpoint(self) -> Dict[str, Any]:
         return {LEARNER: self._learner.checkpoint()}

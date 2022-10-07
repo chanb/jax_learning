@@ -778,6 +778,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         self._episode_lengths = [0]
         self._episode_start_idxes = [0]
         self._last_observations = []
+        self._last_h_states = []
 
     def push(
         self,
@@ -799,9 +800,12 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             if self._episode_lengths[0] <= 0:
                 self._episode_lengths.pop(0)
                 self._episode_start_idxes.pop(0)
+                self._last_observations.pop(0)
+                self._last_h_states.pop(0)
         if terminated or truncated:
             self._episode_lengths.append(0)
             self._last_observations.append(next_obs)
+            self._last_h_states.append(next_h_state)
             self._episode_start_idxes.append(self._pointer + 1)
 
         return super().push(
@@ -818,6 +822,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         self,
         batch_size: int,
         next_obs: np.ndarray,
+        next_h_state: np.ndarray,
         idxes: Optional[np.ndarray] = None,
         horizon_length: int = 2,
         **kwargs,
@@ -894,6 +899,11 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
                 if ep_i < len(self._last_observations)
                 else next_obs
             )
+            h_states[sample_i * horizon_length + length_i] = (
+                self._last_h_states[ep_i]
+                if ep_i < len(self._last_h_states)
+                else next_h_state
+            )
 
         return (
             obss,
@@ -931,6 +941,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         buffer_dict[c.POINTER] = pointer
         buffer_dict[c.COUNT] = count
         buffer_dict[c.LAST_OBSERVATIONS] = self._last_observations
+        buffer_dict[c.LAST_HIDDEN_STATES] = self._last_h_states
         buffer_dict[c.EPISODE_LENGTHS] = self._episode_lengths
         buffer_dict[c.EPISODE_START_IDXES] = self._episode_start_idxes
         buffer_dict[c.CURR_EPISODE_LENGTH] = self._curr_episode_length
@@ -948,5 +959,6 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         self.load_from_buffer_dict(buffer_dict)
         self._curr_episode_length = buffer_dict[c.CURR_EPISODE_LENGTH]
         self._last_observations = buffer_dict[c.LAST_OBSERVATIONS]
+        self._last_h_states = buffer_dict[c.LAST_HIDDEN_STATES]
         self._episode_lengths = buffer_dict[c.EPISODE_LENGTHS]
         self._episode_start_idxes = buffer_dict[c.EPISODE_START_IDXES]

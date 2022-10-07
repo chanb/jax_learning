@@ -1,5 +1,6 @@
 EVALUATION = "Evaluation"
 TRAIN = "Train"
+PRETRAIN = "Pretrain"
 
 EPISODE = "Episode"
 EPISODE_LENGTH = "Episode Length"

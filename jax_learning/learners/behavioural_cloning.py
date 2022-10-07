@@ -10,7 +10,7 @@ from typing import Tuple, Dict
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
 from jax_learning.common import EpochSummary
-from jax_learning.learners.learners import ReinforcementLearner
+from jax_learning.learners.learners import Learner
 from jax_learning.losses.supervised_loss import squared_loss
 from jax_learning.models import StochasticPolicy
 
@@ -22,7 +22,7 @@ LOSS = "loss"
 MEAN_LOSS = "mean_loss"
 
 
-class BC(ReinforcementLearner):
+class BC(Learner):
     def __init__(
         self,
         model: Dict[str, eqx.Module],
@@ -64,13 +64,7 @@ class BC(ReinforcementLearner):
 
         self.update_policy = eqx.filter_jit(update_policy)
 
-    def learn(
-        self,
-        next_obs: np.ndarray,
-        next_h_state: np.ndarray,
-        learn_info: dict,
-        epoch_summary: EpochSummary,
-    ):
+    def learn(self, learn_info: dict, epoch_summary: EpochSummary, **kwargs):
         self._step += 1
 
         obss, h_states, acts_e, _, _, _, _, _, _, _ = self.buffer.sample(

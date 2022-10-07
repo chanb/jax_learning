@@ -79,13 +79,7 @@ class REINFORCE(ReinforcementLearner):
 
         self.update_policy = eqx.filter_jit(update_policy)
 
-    def learn(
-        self,
-        next_obs: np.ndarray,
-        next_h_state: np.ndarray,
-        learn_info: dict,
-        epoch_summary: EpochSummary,
-    ):
+    def learn(self, learn_info: dict, epoch_summary: EpochSummary, **kwargs):
         self._step += 1
 
         if self._step % self._update_frequency != 0:

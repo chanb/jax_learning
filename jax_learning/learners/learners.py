@@ -9,7 +9,7 @@ import optax
 
 from jax_learning.buffers import ReplayBuffer
 from jax_learning.common import EpochSummary, RunningMeanStd, polyak_average_generator
-from jax_learning.constants import LEARNER, NORMALIZE_OBS, NORMALIZE_VALUE
+from jax_learning.constants import NORMALIZE_OBS, NORMALIZE_VALUE, STEP
 
 MODEL = "model"
 OPT = "opt"
@@ -19,7 +19,7 @@ VAL_RMS = "val_rms"
 TARGET_MODEL = "target_model"
 
 
-class ReinforcementLearner:
+class Learner:
     def __init__(
         self,
         model: Dict[str, eqx.Module],
@@ -27,6 +27,7 @@ class ReinforcementLearner:
         buffer: ReplayBuffer,
         cfg: Namespace,
     ):
+        self._step = 0
         self._model = model
         self._opt = opt
         self._opt_state = {
@@ -35,17 +36,9 @@ class ReinforcementLearner:
         }
         self._buffer = buffer
         self._cfg = cfg
-
-        self._step = cfg.load_step
-        self._gamma = cfg.gamma
-        self._update_frequency = cfg.update_frequency
-
         self._obs_rms = False
-        self._val_rms = False
         if getattr(self._cfg, NORMALIZE_OBS, False):
             self._obs_rms = RunningMeanStd(shape=cfg.obs_dim)
-        if getattr(self._cfg, NORMALIZE_VALUE, False):
-            self._val_rms = RunningMeanStd(shape=cfg.rew_dim)
 
     @property
     def buffer(self):
@@ -71,19 +64,63 @@ class ReinforcementLearner:
     def obs_rms(self):
         return self._obs_rms
 
+    @abstractmethod
+    def learn(
+        self,
+        learn_info: dict,
+        epoch_summary: EpochSummary,
+        **kwargs,
+    ):
+        raise NotImplementedError
+
+    def checkpoint(
+        self,
+    ) -> Dict[str, Any]:
+        return {
+            MODEL: self.model,
+            OPT_STATE: self.opt_state,
+            OBS_RMS: self.obs_rms,
+            STEP: self._step,
+        }
+
+    def load(self, data: Dict[str, Any]):
+        self._obs_rms = data[OBS_RMS]
+        self._opt_state = data[OPT_STATE]
+        self._step = data[STEP]
+        for model_key, model_filename in data[MODEL].items():
+            self.model[model_key] = eqx.tree_deserialise_leaves(
+                model_filename, self.model[model_key]
+            )
+
+
+class ReinforcementLearner(Learner):
+    def __init__(
+        self,
+        model: Dict[str, eqx.Module],
+        opt: Dict[str, optax.GradientTransformation],
+        buffer: ReplayBuffer,
+        cfg: Namespace,
+    ):
+        super().__init__(model, opt, buffer, cfg)
+        self._update_frequency = cfg.update_frequency
+        self._gamma = cfg.gamma
+        self._val_rms = False
+        if getattr(self._cfg, NORMALIZE_VALUE, False):
+            self._val_rms = RunningMeanStd(shape=cfg.rew_dim)
+
     @property
     def val_rms(self):
         return self._val_rms
 
-    @abstractmethod
-    def learn(
+    def checkpoint(
         self,
-        next_obs: np.ndarray,
-        next_h_state: np.ndarray,
-        learn_info: dict,
-        epoch_summary: EpochSummary,
-    ):
-        raise NotImplementedError
+    ) -> Dict[str, Any]:
+        learner_dict = super().checkpoint()
+        learner_dict[VAL_RMS] = self.val_rms
+
+    def load(self, data: Dict[str, Any]):
+        super().load(data)
+        self._val_rms = data[VAL_RMS]
 
     def checkpoint(
         self,
