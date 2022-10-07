@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 from typing import Any, Tuple, Dict, Union
+=======
+from typing import Any, Tuple, Dict
+>>>>>>> main
 
 import equinox as eqx
 import jax.random as jrandom
@@ -6,6 +10,7 @@ import numpy as np
 
 from jax_learning.agents import LearningAgent
 from jax_learning.buffers import ReplayBuffer
+<<<<<<< HEAD
 from jax_learning.common import EpochSummary, load_checkpoint
 from jax_learning.constants import (
     EXPLORATION_STRATEGY,
@@ -17,6 +22,17 @@ from jax_learning.constants import (
     LEARNERS,
 )
 from jax_learning.learners import ReinforcementLearner, Learner
+
+AGENT_KEY = "agent_key"
+EPS = "eps"
+EPS_WARMUP = "eps_warmup"
+EPS_DECAY = "eps_decay"
+MIN_EPS = "min_eps"
+=======
+from jax_learning.common import load_checkpoint
+from jax_learning.constants import EXPLORATION_STRATEGY, CONTINUOUS, DISCRETE, LEARNER
+from jax_learning.learners import ReinforcementLearner
+>>>>>>> main
 
 AGENT_KEY = "agent_key"
 EPS = "eps"
@@ -200,6 +216,7 @@ class EpsilonGreedyAgent(RLAgent):
         self._eps_warmup = agent_dict[EPS_WARMUP]
         self._min_eps = agent_dict[MIN_EPS]
         self._learner.load(agent_dict[LEARNER])
+<<<<<<< HEAD
 
 
 class OfflineOnlineRLAgent(RLAgent):
@@ -242,3 +259,5 @@ class OfflineOnlineRLAgent(RLAgent):
         self._key = agent_dict[AGENT_KEY]
         self._learners[OFFLINE].load(agent_dict[LEARNERS][OFFLINE])
         self._learners[ONLINE].load(agent_dict[LEARNERS][ONLINE])
+=======
+>>>>>>> main

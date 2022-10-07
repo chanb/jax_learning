@@ -122,6 +122,25 @@ class ReinforcementLearner(Learner):
         super().load(data)
         self._val_rms = data[VAL_RMS]
 
+    def checkpoint(
+        self,
+    ) -> Dict[str, Any]:
+        return {
+            MODEL: self.model,
+            OPT_STATE: self.opt_state,
+            OBS_RMS: self.obs_rms,
+            VAL_RMS: self.val_rms,
+        }
+
+    def load(self, data: Dict[str, Any]):
+        self._obs_rms = data[OBS_RMS]
+        self._val_rms = data[VAL_RMS]
+        self._opt_state = data[OPT_STATE]
+        for model_key, model_filename in data[MODEL].items():
+            self.model[model_key] = eqx.tree_deserialise_leaves(
+                model_filename, self.model[model_key]
+            )
+
 
 class ReinforcementLearnerWithTargetNetwork(ReinforcementLearner):
     def __init__(
