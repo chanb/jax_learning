@@ -1,4 +1,4 @@
-from typing import Any, Tuple, Dict
+from typing import Any, Tuple, Dict, Union
 
 import equinox as eqx
 import jax.random as jrandom
@@ -6,9 +6,17 @@ import numpy as np
 
 from jax_learning.agents import LearningAgent
 from jax_learning.buffers import ReplayBuffer
-from jax_learning.common import load_checkpoint
-from jax_learning.constants import EXPLORATION_STRATEGY, CONTINUOUS, DISCRETE, LEARNER
-from jax_learning.learners import ReinforcementLearner
+from jax_learning.common import EpochSummary, load_checkpoint
+from jax_learning.constants import (
+    EXPLORATION_STRATEGY,
+    CONTINUOUS,
+    DISCRETE,
+    LEARNER,
+    OFFLINE,
+    ONLINE,
+    LEARNERS,
+)
+from jax_learning.learners import ReinforcementLearner, Learner
 
 AGENT_KEY = "agent_key"
 EPS = "eps"
@@ -192,3 +200,45 @@ class EpsilonGreedyAgent(RLAgent):
         self._eps_warmup = agent_dict[EPS_WARMUP]
         self._min_eps = agent_dict[MIN_EPS]
         self._learner.load(agent_dict[LEARNER])
+
+
+class OfflineOnlineRLAgent(RLAgent):
+    def __init__(
+        self,
+        model: Dict[str, eqx.Module],
+        model_key: str,
+        buffer: ReplayBuffer,
+        learners: Dict[str, Union[Learner, ReinforcementLearner]],
+        key: jrandom.PRNGKey,
+    ):
+        assert (
+            len(learners) == 2
+        ), "There should only be an offline and an online learning algorithm"
+        super().__init__(model, model_key, buffer, learners[ONLINE], key)
+        self._learners = learners
+
+    @property
+    def model_key(self):
+        return self._model_key
+
+    def pretrain(self, learn_info: dict, epoch_summary: EpochSummary, **kwargs):
+        self._learners[OFFLINE].learn(learn_info, epoch_summary, **kwargs)
+
+    def learn(self, learn_info: dict, epoch_summary: EpochSummary, **kwargs):
+        self._learners[ONLINE].learn(learn_info, epoch_summary, **kwargs)
+
+    def checkpoint(self) -> Dict[str, Any]:
+        agent_dict = {
+            AGENT_KEY: self._key,
+            LEARNERS: {
+                OFFLINE: self._learners[OFFLINE].checkpoint(),
+                ONLINE: self._learners[ONLINE].checkpoint(),
+            },
+        }
+        return agent_dict
+
+    def load(self, load_path: str):
+        agent_dict = load_checkpoint(load_path)
+        self._key = agent_dict[AGENT_KEY]
+        self._learners[OFFLINE].load(agent_dict[LEARNERS][OFFLINE])
+        self._learners[ONLINE].load(agent_dict[LEARNERS][ONLINE])

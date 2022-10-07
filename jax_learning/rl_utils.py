@@ -36,6 +36,55 @@ def random_exploration_generator(
         raise NotImplementedError
 
 
+def pretrain(
+    evaluation_env: Any,
+    agent: Agent,
+    cfg: Namespace,
+    eval_cfg: Namespace,
+    checkpoint_path: str,
+):
+    if checkpoint_path:
+        os.makedirs(os.path.join(checkpoint_path, "pretrain"), exist_ok=True)
+    num_updates = cfg.num_updates
+    log_interval = cfg.log_interval
+    evaluation_frequency = cfg.evaluation_frequency
+    checkpoint_frequency = cfg.checkpoint_frequency
+
+    metrics_batch = []
+    epoch_summary = EpochSummary(name="pretrain")
+    epoch_summary.new_epoch()
+    tic = timeit.default_timer()
+    for timestep_i in range(num_updates):
+        timestep_dict = {f"{w.PRETRAIN}/{w.TIMESTEP}": timestep_i}
+        agent.pretrain(timestep_dict, epoch_summary)
+
+        if evaluation_frequency and (timestep_i + 1) % evaluation_frequency == 0:
+            evaluate(evaluation_env, agent, eval_cfg, timestep_dict, epoch_summary)
+
+        if checkpoint_frequency and (timestep_i + 1) % checkpoint_frequency == 0:
+            agent_dict = agent.checkpoint()
+            save_checkpoint(
+                os.path.join(checkpoint_path, f"pretrain/timestep_{timestep_i + 1}"),
+                c.AGENT,
+                agent_dict,
+            )
+
+        if (timestep_i + 1) % log_interval == 0:
+            epoch_summary.print_summary()
+            epoch_summary.new_epoch()
+
+            toc = timeit.default_timer()
+            timestep_dict[c.TIMEDIFF] = toc - tic
+            tic = timeit.default_timer()
+
+            for metrics in metrics_batch:
+                wandb.log(metrics)
+            metrics_batch = []
+
+    for metrics in metrics_batch:
+        wandb.log(metrics)
+
+
 def interact(env: Any, agent: Agent, cfg: Namespace):
     max_timesteps = cfg.max_timesteps
     log_interval = cfg.log_interval
@@ -52,7 +101,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
             save_path = "unnamed_run"
         save_path = f"{save_path}/{time_tag}"
         checkpoint_path = os.path.join(save_path, "checkpoints")
-        os.makedirs(checkpoint_path, exist_ok=True)
+        os.makedirs(os.path.join(checkpoint_path, "interaction"), exist_ok=True)
 
     random_exploration = getattr(cfg, c.RANDOM_EXPLORATION, None)
     num_exploration = getattr(cfg, c.EXPLORATION_STEPS, 0)
@@ -62,13 +111,18 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         max_action = cfg.max_action
         min_action = cfg.min_action
 
+    if getattr(cfg, c.PRETRAIN, False):
+        pretrain(
+            evaluation_env, agent, cfg.pretrain, cfg.evaluation_cfg, checkpoint_path
+        )
+
     obs, info = env.reset(seed=env_rng.randint(0, sys.maxsize))
     h_state = agent.reset()
     ep_return = 0.0
     ep_i = 0
     ep_len = 0
     metrics_batch = []
-    epoch_summary = EpochSummary()
+    epoch_summary = EpochSummary(name="interaction")
     epoch_summary.new_epoch()
     tic = timeit.default_timer()
     for timestep_i in range(max_timesteps):
@@ -87,7 +141,9 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         agent.store(
             obs, h_state, act, rew, terminated, truncated, info, next_obs, next_h_state
         )
-        agent.learn(next_obs, next_h_state, timestep_dict, epoch_summary)
+        agent.learn(
+            timestep_dict, epoch_summary, next_obs=next_obs, next_h_state=next_h_state
+        )
 
         obs = next_obs
         ep_return += rew
@@ -113,7 +169,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
         if checkpoint_frequency and (timestep_i + 1) % checkpoint_frequency == 0:
             agent_dict = agent.checkpoint()
             save_checkpoint(
-                os.path.join(checkpoint_path, f"timestep_{timestep_i + 1}"),
+                os.path.join(checkpoint_path, f"interaction/timestep_{timestep_i + 1}"),
                 c.AGENT,
                 agent_dict,
             )

@@ -139,7 +139,8 @@ AXIS = "axis"
 
 
 class EpochSummary:
-    def __init__(self, default_key_length: int = 10, padding: int = 11):
+    def __init__(self, name, default_key_length: int = 10, padding: int = 11):
+        self._name = name
         self._key_length = default_key_length
         self._padding = padding
         self._summary = dict()
@@ -177,6 +178,7 @@ class EpochSummary:
         toc = timeit.default_timer()
         key_length = self._key_length + self._padding
         print("=" * 100)
+        print(f"{self._name}")
         print(f"Epoch: {self._epoch}")
         print(f"Epoch Time Spent: {toc - self._curr_tic}")
         print(f"Total Time Spent: {toc - self._init_tic}")

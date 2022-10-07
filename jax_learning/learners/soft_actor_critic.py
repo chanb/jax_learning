@@ -282,10 +282,11 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
 
     def learn(
         self,
-        next_obs: np.ndarray,
-        next_h_state: np.ndarray,
         learn_info: dict,
         epoch_summary: EpochSummary,
+        next_obs: np.ndarray,
+        next_h_state: np.ndarray,
+        **kwargs,
     ):
         self._step += 1
 

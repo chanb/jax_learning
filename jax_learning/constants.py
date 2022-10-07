@@ -9,9 +9,14 @@ INFOS = "infos"
 NEXT_OBSERVATIONS = "next_observations"
 NEXT_HIDDEN_STATES = "next_hidden_states"
 LAST_OBSERVATIONS = "last_observations"
+LAST_HIDDEN_STATES = "last_hidden_states"
 
 AGENT = "agent"
 LEARNER = "learner"
+LEARNERS = "learners"
+OFFLINE = "offline"
+ONLINE = "online"
+PRETRAIN = "pretrain"
 
 BUFFER_SIZE = "buffer_size"
 POINTER = "pointer"
@@ -29,6 +34,7 @@ EPISODE_START_IDXES = "episode_start_idxes"
 EPISODIC_RETURN = "episodic_return"
 TIMEDIFF = "time_diff"
 TIMESTEP = "timestep"
+STEP = "step"
 
 RESET = "reset"
 
