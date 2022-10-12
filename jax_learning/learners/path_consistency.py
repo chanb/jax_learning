@@ -8,7 +8,7 @@ import optax
 from argparse import Namespace
 from typing import Sequence, Tuple, Dict
 
-from jax_learning.buffers import ReplayBuffer
+from jax_learning.buffers import TrajectoryNumPyBuffer
 from jax_learning.buffers.utils import batch_flatten, to_jnp
 from jax_learning.common import EpochSummary
 from jax_learning.learners import ReinforcementLearner
@@ -41,7 +41,7 @@ class PCL(ReinforcementLearner):
         self,
         model: Dict[str, eqx.Module],
         opt: Dict[str, optax.GradientTransformation],
-        buffer: ReplayBuffer,
+        buffer: TrajectoryNumPyBuffer,
         cfg: Namespace,
     ):
         super().__init__(model, opt, buffer, cfg)
@@ -198,12 +198,18 @@ class PCL(ReinforcementLearner):
         self.update_models = eqx.filter_jit(update_models)
         self.update_temperature = eqx.filter_jit(update_temperature)
 
+    @property
+    def num_gradient_steps(self):
+        return self._num_gradient_steps
+
+    @num_gradient_steps.setter
+    def num_gradient_steps(self, num_gradient_steps: int):
+        self._num_gradient_steps = num_gradient_steps
+
     def learn(
         self,
         learn_info: dict,
         epoch_summary: EpochSummary,
-        next_obs: np.ndarray,
-        next_h_state: np.ndarray,
         **kwargs,
     ):
         self._step += 1
@@ -231,8 +237,6 @@ class PCL(ReinforcementLearner):
                 sample_idxes,
             ) = self.buffer.sample(
                 batch_size=self._batch_size,
-                next_obs=next_obs,
-                next_h_state=next_h_state,
                 horizon_length=self._horizon_length,
             )
 

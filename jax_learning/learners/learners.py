@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from argparse import Namespace
+from turtle import update
 from typing import Any, Dict
 
 import equinox as eqx
@@ -111,6 +112,14 @@ class ReinforcementLearner(Learner):
     @property
     def val_rms(self):
         return self._val_rms
+
+    @property
+    def update_frequency(self):
+        return self._update_frequency
+
+    @update_frequency.setter
+    def update_frequency(self, update_frequency: int):
+        self._update_frequency = update_frequency
 
     def checkpoint(
         self,

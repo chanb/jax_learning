@@ -8,7 +8,7 @@ import optax
 from argparse import Namespace
 from typing import Sequence, Tuple, Dict
 
-from jax_learning.buffers import ReplayBuffer
+from jax_learning.buffers import TransitionNumPyBuffer
 from jax_learning.buffers.utils import batch_flatten, to_jnp
 from jax_learning.common import EpochSummary, polyak_average_generator
 from jax_learning.learners import ReinforcementLearnerWithTargetNetwork
@@ -47,7 +47,7 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
         model: Dict[str, eqx.Module],
         target_model: Dict[str, eqx.Module],
         opt: Dict[str, optax.GradientTransformation],
-        buffer: ReplayBuffer,
+        buffer: TransitionNumPyBuffer,
         cfg: Namespace,
     ):
         super().__init__(model, target_model, opt, buffer, cfg)
@@ -284,8 +284,6 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
         self,
         learn_info: dict,
         epoch_summary: EpochSummary,
-        next_obs: np.ndarray,
-        next_h_state: np.ndarray,
         **kwargs,
     ):
         self._step += 1
@@ -323,8 +321,6 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
                 _,
             ) = self.buffer.sample_with_next_obs(
                 batch_size=self._batch_size,
-                next_obs=next_obs,
-                next_h_state=next_h_state,
             )
 
             if self.obs_rms:

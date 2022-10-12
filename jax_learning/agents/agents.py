@@ -98,7 +98,7 @@ class LearningAgent(Agent):
     ):
         if self._obs_rms:
             self._obs_rms.update(obs)
-        self._buffer.push(
+        super().store(
             obs, h_state, act, rew, terminated, truncated, info, next_obs, next_h_state
         )
 

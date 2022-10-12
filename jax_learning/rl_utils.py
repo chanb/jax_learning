@@ -42,6 +42,7 @@ def pretrain(
     cfg: Namespace,
     eval_cfg: Namespace,
     checkpoint_path: str,
+    **kwargs,
 ):
     if checkpoint_path:
         os.makedirs(os.path.join(checkpoint_path, "pretrain"), exist_ok=True)
@@ -56,12 +57,16 @@ def pretrain(
     tic = timeit.default_timer()
     for timestep_i in range(num_updates):
         timestep_dict = {f"{w.PRETRAIN}/{w.TIMESTEP}": timestep_i}
-        agent.pretrain(timestep_dict, epoch_summary)
+        agent.pretrain(timestep_dict, epoch_summary, **kwargs)
 
         if evaluation_frequency and (timestep_i + 1) % evaluation_frequency == 0:
             evaluate(evaluation_env, agent, eval_cfg, timestep_dict, epoch_summary)
 
-        if checkpoint_frequency and (timestep_i + 1) % checkpoint_frequency == 0:
+        if (
+            checkpoint_path
+            and checkpoint_frequency
+            and (timestep_i + 1) % checkpoint_frequency == 0
+        ):
             agent_dict = agent.checkpoint()
             save_checkpoint(
                 os.path.join(checkpoint_path, f"pretrain/timestep_{timestep_i + 1}"),
@@ -93,6 +98,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     evaluation_frequency = cfg.evaluation_frequency
     evaluation_env = copy.deepcopy(env)
     checkpoint_frequency = cfg.checkpoint_frequency
+    checkpoint_path = None
     save_path = cfg.save_path
 
     if checkpoint_frequency:
@@ -113,7 +119,13 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
 
     if getattr(cfg, c.PRETRAIN, False):
         pretrain(
-            evaluation_env, agent, cfg.pretrain, cfg.evaluation_cfg, checkpoint_path
+            evaluation_env,
+            agent,
+            cfg.pretrain,
+            cfg.evaluation_cfg,
+            checkpoint_path,
+            next_obs=None,
+            next_h_state=None,
         )
 
     obs, info = env.reset(seed=env_rng.randint(0, sys.maxsize))
@@ -166,7 +178,11 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
                 evaluation_env, agent, cfg.evaluation_cfg, timestep_dict, epoch_summary
             )
 
-        if checkpoint_frequency and (timestep_i + 1) % checkpoint_frequency == 0:
+        if (
+            checkpoint_path
+            and checkpoint_frequency
+            and (timestep_i + 1) % checkpoint_frequency == 0
+        ):
             agent_dict = agent.checkpoint()
             save_checkpoint(
                 os.path.join(checkpoint_path, f"interaction/timestep_{timestep_i + 1}"),

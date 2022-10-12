@@ -7,7 +7,7 @@ import optax
 from argparse import Namespace
 from typing import Tuple, Dict
 
-from jax_learning.buffers import ReplayBuffer
+from jax_learning.buffers import TransitionNumPyBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
 from jax_learning.common import EpochSummary
 from jax_learning.learners.learners import Learner
@@ -27,7 +27,7 @@ class BC(Learner):
         self,
         model: Dict[str, eqx.Module],
         opt: Dict[str, optax.GradientTransformation],
-        buffer: ReplayBuffer,
+        buffer: TransitionNumPyBuffer,
         cfg: Namespace,
     ):
         super().__init__(model, opt, buffer, cfg)
