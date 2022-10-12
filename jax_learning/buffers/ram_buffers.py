@@ -590,6 +590,10 @@ class NextStateNumPyBuffer(NumPyBuffer):
         dtype: np.dtype = np.float32,
         load_buffer: str = None,
     ):
+        self.next_observations = np.zeros(shape=(buffer_size, *obs_dim), dtype=dtype)
+        self.next_hidden_states = np.zeros(
+            shape=(buffer_size, *h_state_dim), dtype=np.float32
+        )
         super().__init__(
             buffer_size=buffer_size,
             obs_dim=obs_dim,
@@ -605,8 +609,6 @@ class NextStateNumPyBuffer(NumPyBuffer):
             dtype=dtype,
             load_buffer=load_buffer,
         )
-        self.next_observations = self.observations.copy()
-        self.next_hidden_states = self.hidden_states.copy()
 
     def __getitem__(self, index: int):
         return (
@@ -759,7 +761,13 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         checkpoint_path: Optional[str] = None,
         rng: np.random.RandomState = np.random.RandomState(),
         dtype: np.dtype = np.float32,
+        load_buffer: str = None,
     ):
+        self._curr_episode_length = 0
+        self._episode_lengths = [0]
+        self._episode_start_idxes = [0]
+        self._last_observations = []
+        self._last_h_states = []
         super().__init__(
             buffer_size=buffer_size,
             obs_dim=obs_dim,
@@ -773,12 +781,8 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             checkpoint_path=checkpoint_path,
             rng=rng,
             dtype=dtype,
+            load_buffer=load_buffer,
         )
-        self._curr_episode_length = 0
-        self._episode_lengths = [0]
-        self._episode_start_idxes = [0]
-        self._last_observations = []
-        self._last_h_states = []
 
     def push(
         self,
@@ -848,7 +852,12 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         if idxes is None:
             episode_idxes = self.rng.randint(
                 int(self._episode_lengths[0] <= 1),
-                len(self._episode_lengths) - int(self._episode_lengths[-1] <= 1),
+                len(self._episode_lengths)
+                - int(
+                    self._episode_lengths[-1] <= 1
+                    or next_obs is None
+                    or next_h_state is None
+                ),
                 size=batch_size,
             )
         else:

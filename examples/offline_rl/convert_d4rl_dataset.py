@@ -4,11 +4,14 @@ import os
 
 from tqdm import tqdm
 
-from jax_learning.buffers.ram_buffers import NextStateNumPyBuffer
+from jax_learning.buffers.ram_buffers import NextStateNumPyBuffer, TrajectoryNumPyBuffer
 
+buffer_types = ("NextStateNumPyBuffer", "TrajectoryNumPyBuffer")
+
+buffer_type = "TrajectoryNumPyBuffer"
 base_h5path = "/Users/chanb/.d4rl/datasets"
-env = "hopper_medium_expert-v2"
-save_path = f"./{env}.pkl"
+env = "hopper_expert-v2"
+save_path = f"../data/{env}-traj_buffer.pkl"
 
 OBSERVATIONS = "observations"
 NEXT_OBSERVATIONS = "next_observations"
@@ -17,6 +20,9 @@ REWARDS = "rewards"
 TERMINALS = "terminals"
 TIMEOUTS = "timeouts"
 
+assert (
+    buffer_type in buffer_types
+), f"{buffer_type} is not in valid buffer types: {buffer_types}"
 
 # Code from D4RL
 def get_keys(h5file):
@@ -46,7 +52,7 @@ act_dim = data_dict[ACTIONS].shape[1:]
 rew_dim = (1,)
 buffer_rng = np.random.RandomState(0)
 
-buffer = NextStateNumPyBuffer(
+buffer = globals()[buffer_type](
     buffer_size=buffer_size,
     obs_dim=obs_dim,
     h_state_dim=h_state_dim,

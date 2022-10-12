@@ -198,6 +198,14 @@ class PCL(ReinforcementLearner):
         self.update_models = eqx.filter_jit(update_models)
         self.update_temperature = eqx.filter_jit(update_temperature)
 
+    @property
+    def num_gradient_steps(self):
+        return self._num_gradient_steps
+
+    @num_gradient_steps.setter
+    def num_gradient_steps(self, num_gradient_steps: int):
+        self._num_gradient_steps = num_gradient_steps
+
     def learn(
         self,
         learn_info: dict,

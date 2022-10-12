@@ -2,7 +2,7 @@ import gym
 import d4rl  # Import required to register environments
 
 # Create the environment
-env = gym.make("hopper-medium-expert-v2")
+env = gym.make("hopper-expert-v2")
 
 # d4rl abides by the OpenAI gym interface
 env.reset()
