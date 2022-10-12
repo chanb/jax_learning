@@ -8,7 +8,7 @@ import optax
 from argparse import Namespace
 from typing import Sequence, Tuple, Dict
 
-from jax_learning.buffers import TrajectoryNumPyBuffer
+from jax_learning.buffers.ram_buffers import TrajectoryNumPyBuffer
 from jax_learning.buffers.utils import batch_flatten, to_jnp
 from jax_learning.common import EpochSummary
 from jax_learning.learners import ReinforcementLearner
