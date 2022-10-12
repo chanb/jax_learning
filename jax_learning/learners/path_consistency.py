@@ -210,8 +210,6 @@ class PCL(ReinforcementLearner):
         self,
         learn_info: dict,
         epoch_summary: EpochSummary,
-        next_obs: np.ndarray,
-        next_h_state: np.ndarray,
         **kwargs,
     ):
         self._step += 1
@@ -239,8 +237,6 @@ class PCL(ReinforcementLearner):
                 sample_idxes,
             ) = self.buffer.sample(
                 batch_size=self._batch_size,
-                next_obs=next_obs,
-                next_h_state=next_h_state,
                 horizon_length=self._horizon_length,
             )
 

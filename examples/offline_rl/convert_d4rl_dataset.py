@@ -9,9 +9,10 @@ from jax_learning.buffers.ram_buffers import NextStateNumPyBuffer, TrajectoryNum
 buffer_types = ("NextStateNumPyBuffer", "TrajectoryNumPyBuffer")
 
 buffer_type = "TrajectoryNumPyBuffer"
+# buffer_type = "NextStateNumPyBuffer"
 base_h5path = "/Users/chanb/.d4rl/datasets"
-env = "hopper_expert-v2"
-save_path = f"../data/{env}-traj_buffer.pkl"
+env = "hopper_medium_expert-v2"
+save_path = f"../data/{env}-{buffer_type}.pkl"
 
 OBSERVATIONS = "observations"
 NEXT_OBSERVATIONS = "next_observations"

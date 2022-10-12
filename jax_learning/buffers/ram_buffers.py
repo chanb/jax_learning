@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from typing import Any, Dict, Iterable, Optional, Tuple
 
 import _pickle as pickle
@@ -13,7 +14,7 @@ from jax_learning.buffers import (
 import jax_learning.constants as c
 
 
-class NumPyBuffer(ReplayBuffer):
+class AbstractNumPyBuffer(ReplayBuffer):
     def __init__(
         self,
         buffer_size: int,
@@ -354,22 +355,7 @@ class NumPyBuffer(ReplayBuffer):
             lengths,
         )
 
-    def get_next(
-        self, next_idxes: np.ndarray, next_obs: np.ndarray, next_h_state: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        # Replace all indices that are equal to memory size to zero
-        idxes_to_modify = np.where(next_idxes == len(self))[0]
-        next_idxes[idxes_to_modify] = 0
-        next_obss = self.observations[next_idxes]
-        next_h_states = self.hidden_states[next_idxes]
-
-        # Replace the content for the sample at current timestep
-        idxes_to_modify = np.where(next_idxes == self._pointer)[0]
-        next_obss[idxes_to_modify] = next_obs
-        next_h_states[idxes_to_modify] = next_h_state
-
-        return next_obss, next_h_states
-
+    @abstractmethod
     def sample(
         self, batch_size: int, idxes: Optional[np.ndarray] = None, **kwargs
     ) -> Tuple[
@@ -384,91 +370,7 @@ class NumPyBuffer(ReplayBuffer):
         np.ndarray,
         np.ndarray,
     ]:
-        if not len(self):
-            raise NoSampleError
-
-        if idxes is None:
-            random_idxes = self.rng.randint(len(self), size=batch_size)
-        else:
-            random_idxes = idxes
-
-        (
-            obss,
-            h_states,
-            acts,
-            rews,
-            dones,
-            terminateds,
-            truncateds,
-            infos,
-            lengths,
-        ) = self.get_transitions(random_idxes)
-
-        return (
-            obss,
-            h_states,
-            acts,
-            rews,
-            dones,
-            terminateds,
-            truncateds,
-            infos,
-            lengths,
-            random_idxes,
-        )
-
-    def sample_with_next_obs(
-        self,
-        batch_size: int,
-        next_obs: np.ndarray,
-        next_h_state: np.ndarray,
-        idxes: Optional[np.ndarray] = None,
-        **kwargs,
-    ) -> Tuple[
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        dict,
-        np.ndarray,
-        np.ndarray,
-    ]:
-        (
-            obss,
-            h_states,
-            acts,
-            rews,
-            dones,
-            terminateds,
-            truncateds,
-            infos,
-            lengths,
-            random_idxes,
-        ) = NumPyBuffer.sample(self, batch_size, idxes)
-
-        next_idxes = random_idxes + 1
-        next_obss, next_h_states = self.get_next(next_idxes, next_obs, next_h_state)
-        next_obss = next_obss[:, None, ...]
-        next_h_states = next_h_states[:, None, ...]
-
-        return (
-            obss,
-            h_states,
-            acts,
-            rews,
-            dones,
-            terminateds,
-            truncateds,
-            next_obss,
-            next_h_states,
-            infos,
-            lengths,
-            random_idxes,
-        )
+        raise NotImplementedError
 
     def sample_init_obs(
         self, batch_size: int, **kwargs
@@ -573,7 +475,198 @@ class NumPyBuffer(ReplayBuffer):
         self.load_from_buffer_dict(buffer_dict)
 
 
-class NextStateNumPyBuffer(NumPyBuffer):
+class TransitionNumPyBuffer(AbstractNumPyBuffer):
+    @abstractmethod
+    def get_next(self, next_idxes: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        raise NotImplementedError
+
+    def sample(
+        self, batch_size: int, idxes: Optional[np.ndarray] = None, **kwargs
+    ) -> Tuple[
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        dict,
+        np.ndarray,
+        np.ndarray,
+    ]:
+        if not len(self):
+            raise NoSampleError
+
+        if idxes is None:
+            random_idxes = self.rng.randint(len(self), size=batch_size)
+        else:
+            random_idxes = idxes
+
+        (
+            obss,
+            h_states,
+            acts,
+            rews,
+            dones,
+            terminateds,
+            truncateds,
+            infos,
+            lengths,
+        ) = self.get_transitions(random_idxes)
+
+        return (
+            obss,
+            h_states,
+            acts,
+            rews,
+            dones,
+            terminateds,
+            truncateds,
+            infos,
+            lengths,
+            random_idxes,
+        )
+
+    def sample_with_next_obs(
+        self,
+        batch_size: int,
+        idxes: Optional[np.ndarray] = None,
+        **kwargs,
+    ) -> Tuple[
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        dict,
+        np.ndarray,
+        np.ndarray,
+    ]:
+        (
+            obss,
+            h_states,
+            acts,
+            rews,
+            dones,
+            terminateds,
+            truncateds,
+            infos,
+            lengths,
+            random_idxes,
+        ) = AbstractNumPyBuffer.sample(self, batch_size, idxes)
+
+        next_idxes = random_idxes + 1
+        next_obss, next_h_states = self.get_next(next_idxes)
+        next_obss = next_obss[:, None, ...]
+        next_h_states = next_h_states[:, None, ...]
+
+        return (
+            obss,
+            h_states,
+            acts,
+            rews,
+            dones,
+            terminateds,
+            truncateds,
+            next_obss,
+            next_h_states,
+            infos,
+            lengths,
+            random_idxes,
+        )
+
+
+class MemoryEfficientNumPyBuffer(TransitionNumPyBuffer):
+    def __init__(
+        self,
+        buffer_size: int,
+        obs_dim: Iterable,
+        h_state_dim: Iterable,
+        act_dim: Iterable,
+        rew_dim: Iterable,
+        infos: dict = dict(),
+        burn_in_window: int = 0,
+        padding_first: bool = False,
+        checkpoint_interval: int = 0,
+        checkpoint_path: Optional[str] = None,
+        rng: np.random.RandomState = np.random.RandomState(),
+        dtype: np.dtype = np.float32,
+        load_buffer: str = None,
+    ):
+        self.next_observation = None
+        self.next_hidden_state = None
+        super().__init__(
+            buffer_size=buffer_size,
+            obs_dim=obs_dim,
+            h_state_dim=h_state_dim,
+            act_dim=act_dim,
+            rew_dim=rew_dim,
+            infos=infos,
+            burn_in_window=burn_in_window,
+            padding_first=padding_first,
+            checkpoint_interval=checkpoint_interval,
+            checkpoint_path=checkpoint_path,
+            rng=rng,
+            dtype=dtype,
+            load_buffer=load_buffer,
+        )
+
+    def push(
+        self,
+        obs: np.ndarray,
+        h_state: np.ndarray,
+        act: np.ndarray,
+        rew: float,
+        terminated: bool,
+        truncated: bool,
+        info: dict,
+        next_obs: np.ndarray,
+        next_h_state: np.ndarray,
+        **kwargs,
+    ) -> bool:
+        self.next_observation = next_obs
+        self.next_hidden_state = next_h_state
+
+        return super().push(
+            obs=obs,
+            h_state=h_state,
+            act=act,
+            rew=rew,
+            terminated=terminated,
+            truncated=truncated,
+            info=info,
+        )
+
+    def get_next(self, next_idxes: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        # Replace all indices that are equal to memory size to zero
+        idxes_to_modify = np.where(next_idxes == len(self))[0]
+        next_idxes[idxes_to_modify] = 0
+        next_obss = self.observations[next_idxes]
+        next_h_states = self.hidden_states[next_idxes]
+
+        # Replace the content for the sample at current timestep
+        idxes_to_modify = np.where(next_idxes == self._pointer)[0]
+        next_obss[idxes_to_modify] = self.next_observation
+        next_h_states[idxes_to_modify] = self.next_hidden_state
+
+        return next_obss, next_h_states
+
+    def get_buffer_dict(self) -> Dict[str, Any]:
+        buffer_dict = super().get_buffer_dict()
+        buffer_dict[c.NEXT_HIDDEN_STATE] = self.next_hidden_state
+        buffer_dict[c.NEXT_OBSERVATION] = self.next_observation
+        return buffer_dict
+
+    def load_from_buffer_dict(self, buffer_dict: Dict[str, Any]):
+        super().load_from_buffer_dict(buffer_dict)
+        self.next_observation = buffer_dict[c.NEXT_OBSERVATION]
+        self.next_hidden_state = buffer_dict[c.NEXT_HIDDEN_STATE]
+
+
+class NextStateNumPyBuffer(TransitionNumPyBuffer):
     def __init__(
         self,
         buffer_size: int,
@@ -620,6 +713,7 @@ class NextStateNumPyBuffer(NumPyBuffer):
             self.terminateds[index],
             self.truncateds[index],
             self.next_observations[index],
+            self.next_hidden_states[index],
             {
                 info_name: info_value[index]
                 for info_name, info_value in self.infos.items()
@@ -697,54 +791,24 @@ class NextStateNumPyBuffer(NumPyBuffer):
             info=info,
         )
 
-    def get_next(
-        self, next_idxes: np.ndarray, next_obs: np.ndarray, next_h_state: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def get_next(self, next_idxes: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         next_obss = self.next_observations[next_idxes]
         next_h_states = self.next_hidden_states[next_idxes]
         return next_obss, next_h_states
 
-    def save(self, save_path: str, end_with_done: bool = True, **kwargs):
-        pointer = self._pointer
-        count = self._count
-
-        if end_with_done:
-            done_idxes = np.where(self.dones == 1)[0]
-            if len(done_idxes) == 0:
-                print("No completed episodes. Nothing to save.")
-                return
-
-            wraparound_idxes = done_idxes[done_idxes < self._pointer]
-            if len(wraparound_idxes) > 0:
-                pointer = (wraparound_idxes[-1] + 1) % self._buffer_size
-                count -= self._pointer - pointer
-            else:
-                pointer = (done_idxes[-1] + 1) % self._buffer_size
-                count -= self._pointer + self._buffer_size - pointer
-
-        buffer_dict = self.get_buffer_dict()
-        buffer_dict[c.POINTER] = pointer
-        buffer_dict[c.COUNT] = count
+    def get_buffer_dict(self) -> Dict[str, Any]:
+        buffer_dict = super().get_buffer_dict()
         buffer_dict[c.NEXT_OBSERVATIONS] = self.next_observations
         buffer_dict[c.NEXT_HIDDEN_STATES] = self.next_hidden_states
+        return buffer_dict
 
-        with gzip.open(save_path, "wb") as f:
-            pickle.dump(
-                buffer_dict,
-                f,
-            )
-
-    def load(self, load_path: str, **kwargs):
-        with gzip.open(load_path, "rb") as f:
-            buffer_dict = pickle.load(f)
-
-        self.load_from_buffer_dict(buffer_dict)
-
+    def load_from_buffer_dict(self, buffer_dict: Dict[str, Any]):
+        super().load_from_buffer_dict(buffer_dict)
         self.next_observations = buffer_dict[c.NEXT_OBSERVATIONS]
         self.next_hidden_states = buffer_dict[c.NEXT_HIDDEN_STATES]
 
 
-class TrajectoryNumPyBuffer(NumPyBuffer):
+class TrajectoryNumPyBuffer(AbstractNumPyBuffer):
     """This buffer stores one trajectory as a sample"""
 
     def __init__(
@@ -766,8 +830,8 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         self._curr_episode_length = 0
         self._episode_lengths = [0]
         self._episode_start_idxes = [0]
-        self._last_observations = []
-        self._last_h_states = []
+        self._last_observations = [np.zeros(obs_dim)]
+        self._last_h_states = [np.zeros(h_state_dim)]
         super().__init__(
             buffer_size=buffer_size,
             obs_dim=obs_dim,
@@ -798,6 +862,8 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         **kwargs,
     ) -> bool:
         self._episode_lengths[-1] += 1
+        self._last_observations[-1] = next_obs
+        self._last_h_states[-1] = next_h_state
         if self.is_full:
             self._episode_lengths[0] -= 1
             self._episode_start_idxes[0] += 1
@@ -808,9 +874,9 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
                 self._last_h_states.pop(0)
         if terminated or truncated:
             self._episode_lengths.append(0)
-            self._last_observations.append(next_obs)
-            self._last_h_states.append(next_h_state)
             self._episode_start_idxes.append(self._pointer + 1)
+            self._last_observations.append(np.zeros(obs.shape))
+            self._last_h_states.append(np.zeros(h_state.shape))
 
         return super().push(
             obs=obs,
@@ -825,8 +891,6 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
     def sample(
         self,
         batch_size: int,
-        next_obs: np.ndarray,
-        next_h_state: np.ndarray,
         idxes: Optional[np.ndarray] = None,
         horizon_length: int = 2,
         **kwargs,
@@ -852,12 +916,7 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         if idxes is None:
             episode_idxes = self.rng.randint(
                 int(self._episode_lengths[0] <= 1),
-                len(self._episode_lengths)
-                - int(
-                    self._episode_lengths[-1] <= 1
-                    or next_obs is None
-                    or next_h_state is None
-                ),
+                len(self._episode_lengths) - int(self._episode_lengths[-1] <= 1),
                 size=batch_size,
             )
         else:
@@ -903,16 +962,8 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
         for sample_i, (ep_i, length_i) in enumerate(zip(episode_idxes, traj_lengths)):
             if length_i == horizon_length:
                 continue
-            obss[sample_i * horizon_length + length_i] = (
-                self._last_observations[ep_i]
-                if ep_i < len(self._last_observations)
-                else next_obs
-            )
-            h_states[sample_i * horizon_length + length_i] = (
-                self._last_h_states[ep_i]
-                if ep_i < len(self._last_h_states)
-                else next_h_state
-            )
+            obss[sample_i * horizon_length + length_i] = self._last_observations[ep_i]
+            h_states[sample_i * horizon_length + length_i] = self._last_h_states[ep_i]
 
         return (
             obss,
@@ -928,44 +979,17 @@ class TrajectoryNumPyBuffer(NumPyBuffer):
             sample_idxes,
         )
 
-    def save(self, save_path: str, end_with_done: bool = True, **kwargs):
-        pointer = self._pointer
-        count = self._count
-
-        if end_with_done:
-            done_idxes = np.where(self.dones == 1)[0]
-            if len(done_idxes) == 0:
-                print("No completed episodes. Nothing to save.")
-                return
-
-            wraparound_idxes = done_idxes[self._episode_start_idxes[-1] < self._pointer]
-            if len(wraparound_idxes) > 0:
-                pointer = (wraparound_idxes[-1]) % self._buffer_size
-                count -= self._pointer - pointer
-            else:
-                pointer = (self._episode_start_idxes[-1]) % self._buffer_size
-                count -= self._pointer + self._buffer_size - pointer
-
-        buffer_dict = self.get_buffer_dict()
-        buffer_dict[c.POINTER] = pointer
-        buffer_dict[c.COUNT] = count
+    def get_buffer_dict(self) -> Dict[str, Any]:
+        buffer_dict = super().get_buffer_dict()
         buffer_dict[c.LAST_OBSERVATIONS] = self._last_observations
         buffer_dict[c.LAST_HIDDEN_STATES] = self._last_h_states
         buffer_dict[c.EPISODE_LENGTHS] = self._episode_lengths
         buffer_dict[c.EPISODE_START_IDXES] = self._episode_start_idxes
         buffer_dict[c.CURR_EPISODE_LENGTH] = self._curr_episode_length
+        return buffer_dict
 
-        with gzip.open(save_path, "wb") as f:
-            pickle.dump(
-                buffer_dict,
-                f,
-            )
-
-    def load(self, load_path: str, **kwargs):
-        with gzip.open(load_path, "rb") as f:
-            buffer_dict = pickle.load(f)
-
-        self.load_from_buffer_dict(buffer_dict)
+    def load_from_buffer_dict(self, buffer_dict: Dict[str, Any]):
+        super().load_from_buffer_dict(buffer_dict)
         self._curr_episode_length = buffer_dict[c.CURR_EPISODE_LENGTH]
         self._last_observations = buffer_dict[c.LAST_OBSERVATIONS]
         self._last_h_states = buffer_dict[c.LAST_HIDDEN_STATES]
