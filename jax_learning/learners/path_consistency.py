@@ -8,7 +8,7 @@ import optax
 from argparse import Namespace
 from typing import Sequence, Tuple, Dict
 
-from jax_learning.buffers import ReplayBuffer
+from jax_learning.buffers import TrajectoryNumPyBuffer
 from jax_learning.buffers.utils import batch_flatten, to_jnp
 from jax_learning.common import EpochSummary
 from jax_learning.learners import ReinforcementLearner
@@ -41,7 +41,7 @@ class PCL(ReinforcementLearner):
         self,
         model: Dict[str, eqx.Module],
         opt: Dict[str, optax.GradientTransformation],
-        buffer: ReplayBuffer,
+        buffer: TrajectoryNumPyBuffer,
         cfg: Namespace,
     ):
         super().__init__(model, opt, buffer, cfg)
