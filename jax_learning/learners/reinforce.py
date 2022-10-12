@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from jax_learning.buffers import TransitionNumPyBuffer
+from jax_learning.buffers.ram_buffers import TransitionNumPyBuffer
 from jax_learning.buffers.utils import to_jnp, batch_flatten
 from jax_learning.common import EpochSummary
 from jax_learning.learners import ReinforcementLearner
