@@ -556,7 +556,7 @@ class TransitionNumPyBuffer(AbstractNumPyBuffer):
             infos,
             lengths,
             random_idxes,
-        ) = AbstractNumPyBuffer.sample(self, batch_size, idxes)
+        ) = TransitionNumPyBuffer.sample(self, batch_size, idxes)
 
         next_idxes = random_idxes + 1
         next_obss, next_h_states = self.get_next(next_idxes)
