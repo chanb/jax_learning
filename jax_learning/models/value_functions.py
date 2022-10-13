@@ -9,8 +9,8 @@ from jax_learning.models import Value, MLP
 
 
 class MLPValue(Value):
-    in_dim: int
-    out_dim: int
+    in_dim: int = eqx.static_field()
+    out_dim: int = eqx.static_field()
     value_function: eqx.Module
 
     def __init__(

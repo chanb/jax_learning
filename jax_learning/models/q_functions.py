@@ -6,7 +6,8 @@ import jax.random as jrandom
 import numpy as np
 
 from jax_learning.distributions import Categorical
-from jax_learning.models import StochasticPolicy, ActionValue, MLP
+from jax_learning.models import StochasticPolicy, ActionValue, MLP, Encoder
+from jax_learning.models.encoders import NatureCNN
 
 
 class MultiQ(ActionValue):
@@ -83,8 +84,8 @@ class SoftmaxQ(StochasticPolicy, ActionValue):
 
 
 class MLPQ(ActionValue):
-    in_dim: int
-    out_dim: int
+    in_dim: int = eqx.static_field()
+    out_dim: int = eqx.static_field()
     q_function: eqx.Module
 
     def __init__(
@@ -106,4 +107,37 @@ class MLPQ(ActionValue):
         if act is not None:
             x = jnp.concatenate((obs, act), axis=-1)
         q_val = self.q_function(x)
+        return q_val, h_state
+
+
+class EncoderQ(ActionValue):
+    encoder: Encoder
+    q_function: ActionValue
+
+    def __init__(
+        self,
+        in_channels: int,
+        height: int,
+        width: int,
+        out_dim: Sequence[int],
+        hidden_dim: int,
+        num_hidden: int,
+        key: jrandom.PRNGKey,
+    ):
+        self.encoder = NatureCNN(
+            in_channels=in_channels, height=height, width=width, key=key
+        )
+        self.q_function = MLPQ(
+            in_dim=self.encoder.encoder.dim_per_layer[-1],
+            out_dim=out_dim,
+            hidden_dim=hidden_dim,
+            num_hidden=num_hidden,
+        )
+
+    def q_values(
+        self, obs: np.ndarray, h_state: np.ndarray, act: Optional[np.ndarray] = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        x = obs
+        x, h_state = self.encoder.encode(x, h_state)
+        q_val = self.q_function(x.reshape(-1), h_state, act)
         return q_val, h_state
