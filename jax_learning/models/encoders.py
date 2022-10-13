@@ -14,15 +14,15 @@ class NatureCNN(Encoder):
 
     def __init__(
         self,
-        in_channels: int,
+        in_channel: int,
         height: int,
         width: int,
         key: jrandom.PRNGKey,
     ):
-        self.in_dim = (in_channels, height, width)
+        self.in_dim = (in_channel, height, width)
         layers = [
             [
-                in_channels,
+                in_channel,
                 32,
                 (8, 8),
                 (4, 4),
@@ -39,4 +39,5 @@ class NatureCNN(Encoder):
     def encode(
         self, x: np.ndarray, h_state: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
+        x = x.reshape(self.in_dim)
         return self.encoder(x), h_state

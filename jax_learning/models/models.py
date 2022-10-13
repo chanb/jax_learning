@@ -95,6 +95,7 @@ class MLP(eqx.Module):
         key: jrandom.PRNGKey,
     ):
         self._in_dim = in_dim
+        self._out_dim = out_dim
         if num_hidden == 0:
             self.weights = [eqx.nn.Linear(in_dim, out_dim, use_bias=False, key=key)]
             self.biases = [jnp.zeros(out_dim)]
@@ -214,6 +215,10 @@ class Conv2D(eqx.Module):
     @property
     def num_layers(self):
         return len(self.dim_per_layer) - 1
+
+    @property
+    def out_dim(self):
+        return (self.parameters[-1].out_channels, *self._dim_per_layer[-1])
 
     @jax.jit
     def __call__(self, input: np.ndarray) -> np.ndarray:

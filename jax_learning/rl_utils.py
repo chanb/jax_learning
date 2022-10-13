@@ -7,6 +7,7 @@ import wandb
 
 from argparse import Namespace
 from datetime import datetime
+from tqdm import tqdm
 from typing import Sequence, Callable, Any, Union
 
 import jax_learning.constants as c
@@ -137,7 +138,7 @@ def interact(env: Any, agent: Agent, cfg: Namespace):
     epoch_summary = EpochSummary(name="interaction")
     epoch_summary.new_epoch()
     tic = timeit.default_timer()
-    for timestep_i in range(max_timesteps):
+    for timestep_i in tqdm(range(max_timesteps)):
         timestep_dict = {f"{w.TRAIN}/{w.TIMESTEP}": timestep_i}
 
         act, next_h_state = agent.compute_action(obs, h_state, timestep_dict)

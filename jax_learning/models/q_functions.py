@@ -1,3 +1,4 @@
+from argparse import Action
 from typing import Sequence, Tuple, Optional, Callable
 
 import equinox as eqx
@@ -114,9 +115,23 @@ class EncoderQ(ActionValue):
     encoder: Encoder
     q_function: ActionValue
 
+    def __init__(self, encoder: Encoder, q_function: ActionValue):
+        self.encoder = encoder
+        self.q_function = q_function
+
+    def q_values(
+        self, obs: np.ndarray, h_state: np.ndarray, act: Optional[np.ndarray] = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        x = obs
+        x, h_state = self.encoder.encode(x, h_state)
+        q_val, h_state = self.q_function.q_values(x.reshape(-1), h_state, act)
+        return q_val, h_state
+
+
+class NatureQ(EncoderQ):
     def __init__(
         self,
-        in_channels: int,
+        in_channel: int,
         height: int,
         width: int,
         out_dim: Sequence[int],
@@ -124,20 +139,12 @@ class EncoderQ(ActionValue):
         num_hidden: int,
         key: jrandom.PRNGKey,
     ):
-        self.encoder = NatureCNN(
-            in_channels=in_channels, height=height, width=width, key=key
-        )
-        self.q_function = MLPQ(
-            in_dim=self.encoder.encoder.dim_per_layer[-1],
+        encoder = NatureCNN(in_channel=in_channel, height=height, width=width, key=key)
+        q_function = MLPQ(
+            in_dim=encoder.encoder.out_dim,
             out_dim=out_dim,
             hidden_dim=hidden_dim,
             num_hidden=num_hidden,
+            key=key,
         )
-
-    def q_values(
-        self, obs: np.ndarray, h_state: np.ndarray, act: Optional[np.ndarray] = None
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        x = obs
-        x, h_state = self.encoder.encode(x, h_state)
-        q_val = self.q_function(x.reshape(-1), h_state, act)
-        return q_val, h_state
+        super().__init__(encoder, q_function)

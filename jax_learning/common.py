@@ -10,6 +10,13 @@ import wandb
 import jax_learning.wandb_constants as w
 
 
+def compose(transforms: Sequence[Callable], input: Any, *args, **kwargs) -> Any:
+    result = input
+    for transform in transforms:
+        result = transform(result, *args, **kwargs)
+    return result
+
+
 def init_wandb(**kwargs):
     wandb.init(**kwargs)
     wandb.define_metric(w.EPISODE_LENGTH, step_metric=w.EPISODE)
