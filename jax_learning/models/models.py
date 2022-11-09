@@ -1,5 +1,4 @@
 from abc import abstractmethod
-from operator import eq
 from typing import Tuple, Sequence, Callable, Any, Optional
 
 import equinox as eqx
