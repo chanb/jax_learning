@@ -8,7 +8,8 @@ import numpy as np
 
 from jax_learning.distributions import Normal, Categorical
 from jax_learning.distributions.transforms import TanhTransform
-from jax_learning.models import StochasticPolicy, MLP
+from jax_learning.models.layers import MLP
+from jax_learning.models import StochasticPolicy
 
 
 class MLPSoftmaxPolicy(StochasticPolicy):

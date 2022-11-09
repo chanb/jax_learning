@@ -5,7 +5,8 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 
-from jax_learning.models import Value, MLP
+from jax_learning.models.layers import MLP
+from jax_learning.models import Value
 
 
 class MLPValue(Value):
