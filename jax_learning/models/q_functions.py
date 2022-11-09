@@ -7,8 +7,9 @@ import jax.random as jrandom
 import numpy as np
 
 from jax_learning.distributions import Categorical
-from jax_learning.models import StochasticPolicy, ActionValue, MLP, Encoder
+from jax_learning.models import StochasticPolicy, ActionValue, Encoder
 from jax_learning.models.encoders import NatureCNN
+from jax_learning.models.layers import MLP
 
 
 class MultiQ(ActionValue):

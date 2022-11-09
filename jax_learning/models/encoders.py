@@ -5,7 +5,8 @@ import numpy as np
 
 from typing import Tuple
 
-from jax_learning.models.models import Encoder, Conv2D
+from jax_learning.models.layers import Conv2D
+from jax_learning.models.models import Encoder
 
 
 class NatureCNN(Encoder):
