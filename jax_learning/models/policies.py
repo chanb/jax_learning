@@ -12,8 +12,8 @@ from jax_learning.models import StochasticPolicy, MLP
 
 
 class MLPSoftmaxPolicy(StochasticPolicy):
-    obs_dim: int
-    act_dim: int
+    obs_dim: int = eqx.static_field()
+    act_dim: int = eqx.static_field()
     policy: eqx.Module
 
     def __init__(
@@ -61,9 +61,9 @@ class MLPSoftmaxPolicy(StochasticPolicy):
 
 
 class MLPGaussianPolicy(StochasticPolicy):
-    obs_dim: int
-    act_dim: int
-    min_std: float
+    obs_dim: int = eqx.static_field()
+    act_dim: int = eqx.static_field()
+    min_std: float = eqx.static_field()
     policy: eqx.Module
 
     def __init__(

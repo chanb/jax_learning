@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Dict, Sequence, Optional, Tuple
 
 import _pickle as pickle
 import gzip
@@ -18,10 +18,10 @@ class AbstractNumPyBuffer(ReplayBuffer):
     def __init__(
         self,
         buffer_size: int,
-        obs_dim: Iterable,
-        h_state_dim: Iterable,
-        act_dim: Iterable,
-        rew_dim: Iterable,
+        obs_dim: Sequence[int],
+        h_state_dim: Sequence[int],
+        act_dim: Sequence[int],
+        rew_dim: Sequence[int],
         infos: dict = dict(),
         burn_in_window: int = 0,
         padding_first: bool = False,
@@ -583,10 +583,10 @@ class MemoryEfficientNumPyBuffer(TransitionNumPyBuffer):
     def __init__(
         self,
         buffer_size: int,
-        obs_dim: Iterable,
-        h_state_dim: Iterable,
-        act_dim: Iterable,
-        rew_dim: Iterable,
+        obs_dim: Sequence[int],
+        h_state_dim: Sequence[int],
+        act_dim: Sequence[int],
+        rew_dim: Sequence[int],
         infos: dict = dict(),
         burn_in_window: int = 0,
         padding_first: bool = False,
@@ -670,10 +670,10 @@ class NextStateNumPyBuffer(TransitionNumPyBuffer):
     def __init__(
         self,
         buffer_size: int,
-        obs_dim: Iterable,
-        h_state_dim: Iterable,
-        act_dim: Iterable,
-        rew_dim: Iterable,
+        obs_dim: Sequence[int],
+        h_state_dim: Sequence[int],
+        act_dim: Sequence[int],
+        rew_dim: Sequence[int],
         infos: dict = dict(),
         burn_in_window: int = 0,
         padding_first: bool = False,
@@ -814,10 +814,10 @@ class TrajectoryNumPyBuffer(AbstractNumPyBuffer):
     def __init__(
         self,
         buffer_size: int,
-        obs_dim: Iterable,
-        h_state_dim: Iterable,
-        act_dim: Iterable,
-        rew_dim: Iterable,
+        obs_dim: Sequence[int],
+        h_state_dim: Sequence[int],
+        act_dim: Sequence[int],
+        rew_dim: Sequence[int],
         infos: dict = dict(),
         burn_in_window: int = 0,
         padding_first: bool = False,
