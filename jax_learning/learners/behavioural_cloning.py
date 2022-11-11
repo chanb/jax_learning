@@ -35,7 +35,6 @@ class BC(Learner):
         self._batch_size = cfg.batch_size
 
         @eqx.filter_grad(has_aux=True)
-        @eqx.filter_jit()
         def compute_loss(
             policy: StochasticPolicy,
             obss: np.ndarray,

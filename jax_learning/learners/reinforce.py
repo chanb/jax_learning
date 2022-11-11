@@ -41,7 +41,6 @@ class REINFORCE(ReinforcementLearner):
         self._sample_idxes = np.arange(self._update_frequency)
 
         @eqx.filter_grad(has_aux=True)
-        @eqx.filter_jit()
         def compute_loss(
             policy: StochasticPolicy,
             obss: np.ndarray,

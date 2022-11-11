@@ -66,7 +66,7 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
         )
 
         @eqx.filter_grad(has_aux=True)
-        @eqx.filter_jit()
+
         def q_loss(
             models: Tuple[ActionValue, ActionValue],
             policy: StochasticPolicy,
@@ -182,7 +182,7 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
         _sac_policy_loss = jax.vmap(sac_policy_loss, in_axes=[0, 0, None])
 
         @eqx.filter_grad(has_aux=True)
-        @eqx.filter_jit()
+
         def policy_loss(
             policy: StochasticPolicy,
             q: ActionValue,
@@ -236,7 +236,7 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
         _sac_temperature_loss = jax.vmap(sac_temperature_loss, in_axes=[None, 0, None])
 
         @eqx.filter_grad(has_aux=True)
-        @eqx.filter_jit()
+
         def temperature_loss(
             temperature: Temperature,
             policy: StochasticPolicy,
