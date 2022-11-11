@@ -49,7 +49,6 @@ class QLearning(ReinforcementLearnerWithTargetNetwork):
         )
 
         @eqx.filter_grad(has_aux=True)
-        @eqx.filter_jit()
         def compute_loss(
             models: Tuple[ActionValue, ActionValue],
             obss: np.ndarray,

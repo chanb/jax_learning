@@ -61,7 +61,6 @@ class PCL(ReinforcementLearner):
         )
 
         @eqx.filter_grad(has_aux=True)
-        @eqx.filter_jit()
         def pc_loss(
             models: Tuple[StochasticPolicy, Value],
             temperature: Temperature,
@@ -155,7 +154,6 @@ class PCL(ReinforcementLearner):
         _sac_temperature_loss = jax.vmap(sac_temperature_loss, in_axes=[None, 0, None])
 
         @eqx.filter_grad(has_aux=True)
-        @eqx.filter_jit()
         def temperature_loss(
             temperature: Temperature,
             policy: StochasticPolicy,
