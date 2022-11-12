@@ -1,4 +1,5 @@
 from argparse import Namespace
+from jax.scipy.special import logsumexp
 from typing import Tuple, Dict
 
 import equinox as eqx
@@ -17,6 +18,7 @@ from jax_learning.models import ActionValue
 import jax_learning.wandb_constants as w
 
 LOSS = "loss"
+CQL_REGULARIZATION = "cql_regularization"
 MEAN_LOSS = "mean_loss"
 MEAN_CURR_Q = "mean_curr_q"
 MEAN_NEXT_Q = "mean_next_q"
@@ -231,3 +233,103 @@ class QLearning(ReinforcementLearnerWithTargetNetwork):
                 learn_info[f"{w.Q_VALUES}/{MIN_NEXT_Q}"],
                 q_learn_info[MIN_NEXT_Q].item(),
             )
+
+
+class CQL(QLearning):
+    def __init__(
+        self,
+        model: Dict[str, eqx.Module],
+        target_model: Dict[str, eqx.Module],
+        opt: Dict[str, optax.GradientTransformation],
+        buffer: TransitionNumPyBuffer,
+        cfg: Namespace,
+    ):
+        super().__init__(model, target_model, opt, buffer, cfg)
+        self._cql_alpha = cfg.alpha
+
+        _q_learning_td_error = jax.vmap(
+            q_learning_td_error, in_axes=[0, 0, 0, 0, 0, None]
+        )
+
+        @eqx.filter_grad(has_aux=True)
+        def compute_loss(
+            models: Tuple[ActionValue, ActionValue],
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            acts: np.ndarray,
+            rews: np.ndarray,
+            terminateds: np.ndarray,
+            next_obss: np.ndarray,
+            next_h_states: np.ndarray,
+            cql_alpha: float,
+        ) -> Tuple[np.ndarray, dict]:
+            (q, target_q) = models
+            curr_q_preds, _ = jax.vmap(q.q_values)(obss, h_states)
+            next_q_preds, _ = jax.vmap(target_q.q_values)(next_obss, next_h_states)
+
+            td_errors = _q_learning_td_error(
+                curr_q_preds, acts, next_q_preds, rews, terminateds, self._gamma
+            )
+            loss = jnp.mean(td_errors**2)
+
+            cql_reg = cql_alpha * jnp.mean(
+                logsumexp(curr_q_preds, axis=1) - jnp.take(curr_q_preds, acts)
+            )
+
+            return loss + cql_reg, {
+                LOSS: loss,
+                CQL_REGULARIZATION: cql_reg,
+                MAX_NEXT_Q: jnp.max(next_q_preds),
+                MIN_NEXT_Q: jnp.min(next_q_preds),
+                MEAN_NEXT_Q: jnp.mean(next_q_preds),
+                MAX_CURR_Q: jnp.max(curr_q_preds),
+                MIN_CURR_Q: jnp.min(curr_q_preds),
+                MEAN_CURR_Q: jnp.mean(curr_q_preds),
+                MAX_TD_ERROR: jnp.max(td_errors),
+                MIN_TD_ERROR: jnp.min(td_errors),
+            }
+
+        apply_residual_gradient = polyak_average_generator(getattr(cfg, OMEGA, 1.0))
+
+        def update_q(
+            q: ActionValue,
+            target_q: ActionValue,
+            opt: optax.GradientTransformation,
+            opt_state: optax.OptState,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            acts: np.ndarray,
+            rews: np.ndarray,
+            terminateds: np.ndarray,
+            next_obss: np.ndarray,
+            next_h_states: np.ndarray,
+        ) -> Tuple[
+            ActionValue,
+            optax.OptState,
+            Tuple[
+                jax.tree_util.PyTreeDef,
+                jax.tree_util.PyTreeDef,
+                jax.tree_util.PyTreeDef,
+            ],
+            dict,
+        ]:
+            grads, learn_info = compute_loss(
+                (q, target_q),
+                obss,
+                h_states,
+                acts,
+                rews,
+                terminateds,
+                next_obss,
+                next_h_states,
+                self._cql_alpha,
+            )
+
+            (q_grads, target_q_grads) = grads
+            grads = jax.tree_map(apply_residual_gradient, q_grads, target_q_grads)
+
+            updates, opt_state = opt.update(grads, opt_state)
+            q = eqx.apply_updates(q, updates)
+            return q, opt_state, (grads, q_grads, target_q_grads), learn_info
+
+        self.update_q = eqx.filter_jit(update_q)
