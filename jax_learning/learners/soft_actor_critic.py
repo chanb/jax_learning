@@ -20,6 +20,7 @@ from jax_learning.models import StochasticPolicy, ActionValue, Temperature
 import jax_learning.wandb_constants as w
 
 Q_LOSS = "q_loss"
+CQL_REGULARIZATION = "cql_regularization"
 POLICY_LOSS = "policy_loss"
 TEMPERATURE_LOSS = "temperature_loss"
 MEAN_Q_LOSS = "mean_q_loss"
@@ -66,7 +67,6 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
         )
 
         @eqx.filter_grad(has_aux=True)
-
         def q_loss(
             models: Tuple[ActionValue, ActionValue],
             policy: StochasticPolicy,
@@ -182,7 +182,6 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
         _sac_policy_loss = jax.vmap(sac_policy_loss, in_axes=[0, 0, None])
 
         @eqx.filter_grad(has_aux=True)
-
         def policy_loss(
             policy: StochasticPolicy,
             q: ActionValue,
@@ -236,7 +235,6 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
         _sac_temperature_loss = jax.vmap(sac_temperature_loss, in_axes=[None, 0, None])
 
         @eqx.filter_grad(has_aux=True)
-
         def temperature_loss(
             temperature: Temperature,
             policy: StochasticPolicy,
@@ -487,3 +485,254 @@ class SAC(ReinforcementLearnerWithTargetNetwork):
             learn_info[f"{w.ACTION_LOG_PROBS}/mean_q_log_prob"] = q_learn_info[
                 "mean_q_log_prob"
             ]
+
+
+class CQLSAC(SAC):
+    def __init__(
+        self,
+        model: Dict[str, eqx.Module],
+        target_model: Dict[str, eqx.Module],
+        opt: Dict[str, optax.GradientTransformation],
+        buffer: TransitionNumPyBuffer,
+        cfg: Namespace,
+    ):
+        super().__init__(model, target_model, opt, buffer, cfg)
+        self._cql_alpha = cfg.alpha
+        self._cql_num_action_samples = cfg.num_action_samples
+        self._min_action = getattr(cfg, "min_action", -1.0)
+        self._max_action = getattr(cfg, "max_action", 1.0)
+
+        _clipped_min_q_td_error = jax.vmap(
+            clipped_min_q_td_error, in_axes=[0, 0, 0, 0, 0, None, None]
+        )
+
+        def uniform_act_lprobs(key: jrandom.PRNGKey, num_samples: int):
+            acts = jrandom.uniform(
+                key,
+                (num_samples, *cfg.act_dim),
+                maxval=self._max_action - self._min_action,
+            ) - ((self._max_action + self._min_action) / 2)
+            lprobs = np.log(1 / (self._max_action - self._min_action))
+            return acts, lprobs
+
+        @eqx.filter_grad(has_aux=True)
+        def q_loss(
+            models: Tuple[ActionValue, ActionValue],
+            policy: StochasticPolicy,
+            temperature: Temperature,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            acts: np.ndarray,
+            rews: np.ndarray,
+            terminateds: np.ndarray,
+            next_obss: np.ndarray,
+            next_h_states: np.ndarray,
+            cql_alpha: float,
+            cql_num_action_samples: int,
+            keys: Sequence[jrandom.PRNGKey],
+            cql_keys: Sequence[jrandom.PRNGKey],
+        ) -> Tuple[np.ndarray, dict]:
+            (q, target_q) = models
+            curr_xs = jnp.concatenate((obss, acts), axis=-1)
+            curr_q_preds, _ = jax.vmap(q.q_values)(curr_xs, h_states)
+            curr_q_preds_min = jnp.min(curr_q_preds, axis=1)
+
+            next_acts, next_lprobs, _ = jax.vmap(policy.act_lprob)(
+                next_obss, next_h_states, keys
+            )
+            next_lprobs = jnp.sum(next_lprobs, axis=-1, keepdims=True)
+
+            next_xs = jnp.concatenate((next_obss, next_acts), axis=-1)
+            next_q_preds, _ = jax.vmap(target_q.q_values)(next_xs, next_h_states)
+            next_q_preds_min = jnp.min(next_q_preds, axis=1)
+
+            temp = temperature()
+
+            def batch_td_errors(curr_q_pred):
+                return _clipped_min_q_td_error(
+                    curr_q_pred,
+                    next_q_preds_min,
+                    next_lprobs,
+                    rews,
+                    terminateds,
+                    temp,
+                    self._gamma,
+                )
+
+            td_errors = jax.vmap(batch_td_errors, in_axes=[1])(curr_q_preds)
+            loss = jnp.sum(jnp.mean(td_errors**2, axis=0))
+
+            cql_rand_acts, cql_rand_lprobs = uniform_act_lprobs(
+                cql_keys[0], cql_num_action_samples
+            )
+            cql_rand_lprobs = jnp.sum(cql_rand_lprobs, axis=-1, keepdims=True)
+
+            cql_curr_acts, cql_curr_lprobs, _ = jax.vmap(policy.act_lprob)(
+                np.tile(obss, cql_num_action_samples).reshape(
+                    (cql_num_action_samples * len(obss), *obss.shape[1:])
+                ),
+                np.tile(h_states, cql_num_action_samples).reshape(
+                    (cql_num_action_samples * len(h_states), *h_states.shape[1:])
+                ),
+                cql_keys,
+            )
+            cql_curr_lprobs = jnp.sum(cql_curr_lprobs, axis=-1, keepdims=True)
+
+            cql_next_acts, cql_next_lprobs, _ = jax.vmap(policy.act_lprob)(
+                np.tile(next_obss, cql_num_action_samples).reshape(
+                    (cql_num_action_samples * len(next_obss), *obss.shape[1:])
+                ),
+                np.tile(next_h_states, cql_num_action_samples).reshape(
+                    (cql_num_action_samples * len(next_h_states), *h_states.shape[1:])
+                ),
+                cql_keys,
+            )
+            cql_next_lprobs = jnp.sum(cql_next_lprobs, axis=-1, keepdims=True)
+
+            cql_rand_xs = jnp.concatenate(
+                (
+                    np.tile(obss, cql_num_action_samples).reshape(
+                        (cql_num_action_samples * len(obss), *obss.shape[1:])
+                    ),
+                    cql_rand_acts,
+                ),
+                axis=-1,
+            )
+            cql_rand_q_preds, _ = jax.vmap(q.q_values)(
+                cql_rand_xs,
+                np.tile(h_states, cql_num_action_samples).reshape(
+                    (cql_num_action_samples * len(h_states), *h_states.shape[1:])
+                ),
+            )
+
+            cql_curr_xs = jnp.concatenate(
+                (
+                    np.tile(obss, cql_num_action_samples).reshape(
+                        (cql_num_action_samples * len(obss), *obss.shape[1:])
+                    ),
+                    cql_curr_acts,
+                ),
+                axis=-1,
+            )
+            cql_curr_q_preds, _ = jax.vmap(q.q_values)(
+                cql_curr_xs,
+                np.tile(h_states, cql_num_action_samples).reshape(
+                    (cql_num_action_samples * len(h_states), *h_states.shape[1:])
+                ),
+            )
+
+            cql_next_xs = jnp.concatenate(
+                (
+                    np.tile(next_obss, cql_num_action_samples).reshape(
+                        (cql_num_action_samples * len(next_obss), *next_obss.shape[1:])
+                    ),
+                    cql_next_acts,
+                ),
+                axis=-1,
+            )
+            cql_next_q_preds, _ = jax.vmap(q.q_values)(
+                cql_next_xs,
+                np.tile(next_h_states, cql_num_action_samples).reshape(
+                    (
+                        cql_num_action_samples * len(next_h_states),
+                        *next_h_states.shape[1:],
+                    )
+                ),
+            )
+
+            all_cql_q1 = jnp.concatenate(
+                (
+                    cql_rand_q_preds[:, 0] - cql_rand_lprobs,
+                    cql_curr_q_preds[:, 0] - cql_curr_lprobs,
+                    cql_next_q_preds[:, 0] - cql_next_lprobs,
+                )
+            )
+            all_cql_q2 = jnp.concatenate(
+                (
+                    cql_rand_q_preds[:, 1] - cql_rand_lprobs,
+                    cql_curr_q_preds[:, 1] - cql_curr_lprobs,
+                    cql_next_q_preds[:, 1] - cql_next_lprobs,
+                )
+            )
+            cql_reg = cql_alpha * (
+                jnp.mean(jnp.logaddexp(all_cql_q1 / cql_alpha))
+                + jnp.mean(jnp.logaddexp(all_cql_q2 / cql_alpha))
+                - jnp.sum(jnp.mean(curr_q_preds, axis=0))
+            )
+
+            return loss + cql_reg, {
+                Q_LOSS: loss,
+                CQL_REGULARIZATION: cql_reg,
+                MAX_NEXT_Q: jnp.max(next_q_preds_min),
+                MIN_NEXT_Q: jnp.min(next_q_preds_min),
+                MEAN_NEXT_Q: jnp.mean(next_q_preds_min),
+                MAX_CURR_Q: jnp.max(curr_q_preds_min),
+                MIN_CURR_Q: jnp.min(curr_q_preds_min),
+                MEAN_CURR_Q: jnp.mean(curr_q_preds_min),
+                MAX_TD_ERROR: jnp.max(td_errors),
+                MIN_TD_ERROR: jnp.min(td_errors),
+                "max_q_log_prob": jnp.max(next_lprobs),
+                "min_q_log_prob": jnp.min(next_lprobs),
+                "mean_q_log_prob": jnp.mean(next_lprobs),
+            }
+
+        apply_residual_gradient = polyak_average_generator(getattr(cfg, OMEGA, 1.0))
+
+        def update_q(
+            q: ActionValue,
+            target_q: ActionValue,
+            policy: StochasticPolicy,
+            temperature: Temperature,
+            opt: optax.GradientTransformation,
+            opt_state: optax.OptState,
+            obss: np.ndarray,
+            h_states: np.ndarray,
+            acts: np.ndarray,
+            rews: np.ndarray,
+            terminateds: np.ndarray,
+            next_obss: np.ndarray,
+            next_h_states: np.ndarray,
+        ) -> Tuple[
+            ActionValue,
+            optax.OptState,
+            Tuple[
+                jax.tree_util.PyTreeDef,
+                jax.tree_util.PyTreeDef,
+                jax.tree_util.PyTreeDef,
+            ],
+            dict,
+            jrandom.PRNGKey,
+        ]:
+            sample_key = jrandom.split(self._sample_key, num=1)[0]
+            keys = jrandom.split(self._sample_key, num=self._batch_size)
+            cql_keys = jrandom.split(
+                self._sample_key, num=self._batch_size * self.cql_num_action_samples
+            )
+            grads, learn_info = q_loss(
+                (q, target_q),
+                policy,
+                temperature,
+                obss,
+                h_states,
+                acts,
+                rews,
+                terminateds,
+                next_obss,
+                next_h_states,
+                self._cql_num_action_samples,
+                self._cql_alpha,
+                keys,
+                cql_keys,
+            )
+            (q_grads, target_q_grads) = grads
+            grads = jax.tree_map(apply_residual_gradient, q_grads, target_q_grads)
+
+            updates, opt_state = opt.update(grads, opt_state)
+            q = eqx.apply_updates(q, updates)
+            return (
+                q,
+                opt_state,
+                grads,
+                learn_info,
+                sample_key,
+            )
