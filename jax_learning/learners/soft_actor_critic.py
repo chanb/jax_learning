@@ -581,6 +581,7 @@ class CQLSAC(SAC):
             )
             cql_curr_lprobs = jnp.sum(cql_curr_lprobs, axis=-1, keepdims=True)
 
+            # XXX: The log probs might be inaccurate here but that's the same as original...
             cql_next_acts, cql_next_lprobs, _ = jax.vmap(policy.act_lprob)(
                 jnp.tile(next_obss, cql_num_action_samples).reshape(
                     (cql_num_action_samples * len(next_obss), *obss.shape[1:])
