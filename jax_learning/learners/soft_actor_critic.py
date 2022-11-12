@@ -6,6 +6,7 @@ import numpy as np
 import optax
 
 from argparse import Namespace
+from jax.scipy.special import logsumexp
 from typing import Sequence, Tuple, Dict
 
 from jax_learning.buffers.ram_buffers import TransitionNumPyBuffer
@@ -512,7 +513,9 @@ class CQLSAC(SAC):
                 (num_samples, *cfg.act_dim),
                 maxval=self._max_action - self._min_action,
             ) - ((self._max_action + self._min_action) / 2)
-            lprobs = np.log(1 / (self._max_action - self._min_action))
+            lprobs = jnp.ones(acts.shape) * np.log(
+                1 / (self._max_action - self._min_action)
+            )
             return acts, lprobs
 
         @eqx.filter_grad(has_aux=True)
@@ -563,15 +566,15 @@ class CQLSAC(SAC):
             loss = jnp.sum(jnp.mean(td_errors**2, axis=0))
 
             cql_rand_acts, cql_rand_lprobs = uniform_act_lprobs(
-                cql_keys[0], cql_num_action_samples
+                cql_keys[0], cql_num_action_samples * len(obss)
             )
             cql_rand_lprobs = jnp.sum(cql_rand_lprobs, axis=-1, keepdims=True)
 
             cql_curr_acts, cql_curr_lprobs, _ = jax.vmap(policy.act_lprob)(
-                np.tile(obss, cql_num_action_samples).reshape(
+                jnp.tile(obss, cql_num_action_samples).reshape(
                     (cql_num_action_samples * len(obss), *obss.shape[1:])
                 ),
-                np.tile(h_states, cql_num_action_samples).reshape(
+                jnp.tile(h_states, cql_num_action_samples).reshape(
                     (cql_num_action_samples * len(h_states), *h_states.shape[1:])
                 ),
                 cql_keys,
@@ -579,10 +582,10 @@ class CQLSAC(SAC):
             cql_curr_lprobs = jnp.sum(cql_curr_lprobs, axis=-1, keepdims=True)
 
             cql_next_acts, cql_next_lprobs, _ = jax.vmap(policy.act_lprob)(
-                np.tile(next_obss, cql_num_action_samples).reshape(
+                jnp.tile(next_obss, cql_num_action_samples).reshape(
                     (cql_num_action_samples * len(next_obss), *obss.shape[1:])
                 ),
-                np.tile(next_h_states, cql_num_action_samples).reshape(
+                jnp.tile(next_h_states, cql_num_action_samples).reshape(
                     (cql_num_action_samples * len(next_h_states), *h_states.shape[1:])
                 ),
                 cql_keys,
@@ -591,7 +594,7 @@ class CQLSAC(SAC):
 
             cql_rand_xs = jnp.concatenate(
                 (
-                    np.tile(obss, cql_num_action_samples).reshape(
+                    jnp.tile(obss, cql_num_action_samples).reshape(
                         (cql_num_action_samples * len(obss), *obss.shape[1:])
                     ),
                     cql_rand_acts,
@@ -600,14 +603,14 @@ class CQLSAC(SAC):
             )
             cql_rand_q_preds, _ = jax.vmap(q.q_values)(
                 cql_rand_xs,
-                np.tile(h_states, cql_num_action_samples).reshape(
+                jnp.tile(h_states, cql_num_action_samples).reshape(
                     (cql_num_action_samples * len(h_states), *h_states.shape[1:])
                 ),
             )
 
             cql_curr_xs = jnp.concatenate(
                 (
-                    np.tile(obss, cql_num_action_samples).reshape(
+                    jnp.tile(obss, cql_num_action_samples).reshape(
                         (cql_num_action_samples * len(obss), *obss.shape[1:])
                     ),
                     cql_curr_acts,
@@ -616,15 +619,15 @@ class CQLSAC(SAC):
             )
             cql_curr_q_preds, _ = jax.vmap(q.q_values)(
                 cql_curr_xs,
-                np.tile(h_states, cql_num_action_samples).reshape(
+                jnp.tile(h_states, cql_num_action_samples).reshape(
                     (cql_num_action_samples * len(h_states), *h_states.shape[1:])
                 ),
             )
 
             cql_next_xs = jnp.concatenate(
                 (
-                    np.tile(next_obss, cql_num_action_samples).reshape(
-                        (cql_num_action_samples * len(next_obss), *next_obss.shape[1:])
+                    jnp.tile(obss, cql_num_action_samples).reshape(
+                        (cql_num_action_samples * len(obss), *obss.shape[1:])
                     ),
                     cql_next_acts,
                 ),
@@ -632,10 +635,10 @@ class CQLSAC(SAC):
             )
             cql_next_q_preds, _ = jax.vmap(q.q_values)(
                 cql_next_xs,
-                np.tile(next_h_states, cql_num_action_samples).reshape(
+                jnp.tile(h_states, cql_num_action_samples).reshape(
                     (
-                        cql_num_action_samples * len(next_h_states),
-                        *next_h_states.shape[1:],
+                        cql_num_action_samples * len(h_states),
+                        *h_states.shape[1:],
                     )
                 ),
             )
@@ -645,18 +648,20 @@ class CQLSAC(SAC):
                     cql_rand_q_preds[:, 0] - cql_rand_lprobs,
                     cql_curr_q_preds[:, 0] - cql_curr_lprobs,
                     cql_next_q_preds[:, 0] - cql_next_lprobs,
-                )
+                ),
+                axis=1,
             )
             all_cql_q2 = jnp.concatenate(
                 (
                     cql_rand_q_preds[:, 1] - cql_rand_lprobs,
                     cql_curr_q_preds[:, 1] - cql_curr_lprobs,
                     cql_next_q_preds[:, 1] - cql_next_lprobs,
-                )
+                ),
+                axis=1,
             )
             cql_reg = cql_alpha * (
-                jnp.mean(jnp.logaddexp(all_cql_q1))
-                + jnp.mean(jnp.logaddexp(all_cql_q2))
+                jnp.mean(logsumexp(all_cql_q1, axis=1))
+                + jnp.mean(logsumexp(all_cql_q2, axis=1))
                 - jnp.sum(jnp.mean(curr_q_preds, axis=0))
             )
 
@@ -706,7 +711,7 @@ class CQLSAC(SAC):
             sample_key = jrandom.split(self._sample_key, num=1)[0]
             keys = jrandom.split(self._sample_key, num=self._batch_size)
             cql_keys = jrandom.split(
-                self._sample_key, num=self._batch_size * self.cql_num_action_samples
+                self._sample_key, num=self._batch_size * self._cql_num_action_samples
             )
             grads, learn_info = q_loss(
                 (q, target_q),
@@ -719,8 +724,8 @@ class CQLSAC(SAC):
                 terminateds,
                 next_obss,
                 next_h_states,
-                self._cql_num_action_samples,
                 self._cql_alpha,
+                self._cql_num_action_samples,
                 keys,
                 cql_keys,
             )
@@ -736,3 +741,5 @@ class CQLSAC(SAC):
                 learn_info,
                 sample_key,
             )
+
+        self.update_q = eqx.filter_jit(update_q)
