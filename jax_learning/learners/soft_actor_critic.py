@@ -655,8 +655,8 @@ class CQLSAC(SAC):
                 )
             )
             cql_reg = cql_alpha * (
-                jnp.mean(jnp.logaddexp(all_cql_q1 / cql_alpha))
-                + jnp.mean(jnp.logaddexp(all_cql_q2 / cql_alpha))
+                jnp.mean(jnp.logaddexp(all_cql_q1))
+                + jnp.mean(jnp.logaddexp(all_cql_q2))
                 - jnp.sum(jnp.mean(curr_q_preds, axis=0))
             )
 
