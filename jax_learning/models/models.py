@@ -15,16 +15,16 @@ class Model(eqx.Module):
 
 
 class Temperature(Model):
-    log_alpha: float
+    log_temp: float
 
     def __init__(
         self,
-        init_alpha: float = 1.0,
+        init_temp: float = 1.0,
     ):
-        self.log_alpha = jnp.log(init_alpha)
+        self.log_temp = jnp.log(init_temp)
 
     def __call__(self):
-        return jnp.exp(self.log_alpha)
+        return jnp.exp(self.log_temp)
 
 
 class Policy(Model):
