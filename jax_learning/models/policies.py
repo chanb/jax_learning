@@ -160,3 +160,8 @@ class MLPSquashedGaussianPolicy(MLPGaussianPolicy):
         lprob = Normal.lprob(act_mean, act_std, act)
         lprob = lprob - TanhTransform.log_abs_det_jacobian(act_pret, act)
         return lprob, h_state
+
+
+class EncoderPolicy(StochasticPolicy):
+    def __init__(self):
+        pass
