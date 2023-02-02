@@ -1,4 +1,4 @@
-from typing import Tuple, Sequence, Callable
+from typing import Tuple, Sequence, Callable, Optional
 
 import equinox as eqx
 import jax
@@ -154,3 +154,82 @@ class Conv2D(eqx.Module):
             x = self.parameters[layer_i](x)
             x = self.activations[layer_i](x)
         return x
+
+
+class SelfAttention(eqx.Module):
+    _num_heads: int = eqx.static_field()
+    _embd_dim: int = eqx.static_field()
+    parameters: eqx.nn.MultiheadAttention
+
+    def __init__(
+        self,
+        num_heads: int,
+        embd_dim: int,
+        key=jrandom.PRNGKey
+    ):
+        self._embd_dim = embd_dim
+        self._num_heads = num_heads
+        self.parameters = eqx.nn.MultiheadAttention(
+            num_heads=num_heads, query_size=embd_dim, key=key
+        )
+
+    @jax.jit
+    def __call__(self, input: np.ndarray, mask: Optional[np.ndarray] = None) -> np.ndarray:
+        x = input
+        x = self.parameters(query=x, key_=x, value=x, mask=mask, inference=True)
+        return x
+
+
+class CausalSelfAttention(SelfAttention):
+    def __init__(
+        self,
+        num_heads: int,
+        embd_dim: int,
+        key=jrandom.PRNGKey
+    ):
+        super().__init__(num_heads, embd_dim, key)
+
+    @jax.jit
+    def __call__(self, input: np.ndarray) -> np.ndarray:
+        causal_mask = jnp.tril(np.ones((self._num_heads, input.shape[0], input.shape[0])))
+        return super().__call__(input, mask=causal_mask)
+
+
+class GPT2Block(eqx.Module):
+    attention: SelfAttention
+    embedding: eqx.nn.Linear
+    feedforward: eqx.nn.linear
+    projection: eqx.nn.linear
+    layer_norm_1: eqx.nn.LayerNorm
+    layer_norm_2: eqx.nn.LayerNorm
+    _in_dim: int = eqx.static_field()
+    _vmap_feedforward: Callable = eqx.static_field()
+
+    def __init__(
+        self,
+        in_dim: int,
+        num_heads: int,
+        embd_dim: int,
+        key=jrandom.PRNGKey
+    ):
+        self._in_dim = in_dim
+        self.attention = CausalSelfAttention(num_heads=num_heads, embd_dim=embd_dim, key=key)
+        key, _ = jrandom.split(key)
+        self.feedforward = eqx.nn.Linear(embd_dim, embd_dim * 4, key=key)
+        key, _ = jrandom.split(key)
+        self.projection = eqx.nn.Linear(embd_dim * 4, embd_dim, key=key)
+        key, _ = jrandom.split(key)
+        self.embedding = eqx.nn.Linear(in_dim, embd_dim, key=key)
+        self.layer_norm_1 = eqx.nn.LayerNorm(embd_dim)
+        self.layer_norm_2 = eqx.nn.LayerNorm(embd_dim)
+        self._vmap_feedforward = jax.vmap(self._feedforward)
+
+    @jax.jit
+    def __call__(self, input: np.ndarray) -> np.ndarray:
+        x = jax.vmap(self.embedding)(input)
+        x = x + self.attention(self.layer_norm_1(x))
+        x = self._vmap_feedforward(x)
+        return x
+
+    def _feedforward(self, input: np.ndarray) -> np.ndarray:
+        return input + self.projection(jax.nn.gelu(self.feedforward(self.layer_norm_2(input))))
