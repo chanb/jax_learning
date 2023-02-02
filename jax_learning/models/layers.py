@@ -161,12 +161,7 @@ class SelfAttention(eqx.Module):
     _embd_dim: int = eqx.static_field()
     parameters: eqx.nn.MultiheadAttention
 
-    def __init__(
-        self,
-        num_heads: int,
-        embd_dim: int,
-        key=jrandom.PRNGKey
-    ):
+    def __init__(self, num_heads: int, embd_dim: int, key=jrandom.PRNGKey):
         self._embd_dim = embd_dim
         self._num_heads = num_heads
         self.parameters = eqx.nn.MultiheadAttention(
@@ -174,24 +169,23 @@ class SelfAttention(eqx.Module):
         )
 
     @jax.jit
-    def __call__(self, input: np.ndarray, mask: Optional[np.ndarray] = None) -> np.ndarray:
+    def __call__(
+        self, input: np.ndarray, mask: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         x = input
         x = self.parameters(query=x, key_=x, value=x, mask=mask, inference=True)
         return x
 
 
 class CausalSelfAttention(SelfAttention):
-    def __init__(
-        self,
-        num_heads: int,
-        embd_dim: int,
-        key=jrandom.PRNGKey
-    ):
+    def __init__(self, num_heads: int, embd_dim: int, key=jrandom.PRNGKey):
         super().__init__(num_heads, embd_dim, key)
 
     @jax.jit
     def __call__(self, input: np.ndarray) -> np.ndarray:
-        causal_mask = jnp.tril(np.ones((self._num_heads, input.shape[0], input.shape[0])))
+        causal_mask = jnp.tril(
+            np.ones((self._num_heads, input.shape[0], input.shape[0]))
+        )
         return super().__call__(input, mask=causal_mask)
 
 
@@ -205,15 +199,11 @@ class GPT2Block(eqx.Module):
     _in_dim: int = eqx.static_field()
     _vmap_feedforward: Callable = eqx.static_field()
 
-    def __init__(
-        self,
-        in_dim: int,
-        num_heads: int,
-        embd_dim: int,
-        key=jrandom.PRNGKey
-    ):
+    def __init__(self, in_dim: int, num_heads: int, embd_dim: int, key=jrandom.PRNGKey):
         self._in_dim = in_dim
-        self.attention = CausalSelfAttention(num_heads=num_heads, embd_dim=embd_dim, key=key)
+        self.attention = CausalSelfAttention(
+            num_heads=num_heads, embd_dim=embd_dim, key=key
+        )
         key, _ = jrandom.split(key)
         self.feedforward = eqx.nn.Linear(embd_dim, embd_dim * 4, key=key)
         key, _ = jrandom.split(key)
@@ -232,4 +222,6 @@ class GPT2Block(eqx.Module):
         return x
 
     def _feedforward(self, input: np.ndarray) -> np.ndarray:
-        return input + self.projection(jax.nn.gelu(self.feedforward(self.layer_norm_2(input))))
+        return input + self.projection(
+            jax.nn.gelu(self.feedforward(self.layer_norm_2(input)))
+        )

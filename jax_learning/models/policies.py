@@ -9,7 +9,7 @@ import numpy as np
 from jax_learning.distributions import Normal, Categorical
 from jax_learning.distributions.transforms import TanhTransform
 from jax_learning.models.layers import MLP
-from jax_learning.models import StochasticPolicy
+from jax_learning.models import StochasticPolicy, Encoder
 
 
 class MLPSoftmaxPolicy(StochasticPolicy):
@@ -162,6 +162,6 @@ class MLPSquashedGaussianPolicy(MLPGaussianPolicy):
         return lprob, h_state
 
 
-class EncoderPolicy(StochasticPolicy):
-    def __init__(self):
+class DecisionTransformer(StochasticPolicy):
+    def __init__(self, encoder: Encoder, policy: StochasticPolicy):
         pass
