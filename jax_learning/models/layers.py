@@ -85,7 +85,7 @@ class Conv2D(eqx.Module):
     ):
         assert (
             len(layers) > 0
-        ), f"Number of CNN layers should be at least 1, got: {len(layers)}"
+        ), f"Number of Conv layers should be at least 1, got: {len(layers)}"
         self.parameters = []
         self.activations = []
         self._dim_per_layer = [in_dim]
@@ -146,6 +146,70 @@ class Conv2D(eqx.Module):
     @property
     def out_dim(self):
         return (self.parameters[-1].out_channels, *self._dim_per_layer[-1])
+
+    @jax.jit
+    def __call__(self, input: np.ndarray) -> np.ndarray:
+        x = input
+        for layer_i in range(self.num_layers):
+            x = self.parameters[layer_i](x)
+            x = self.activations[layer_i](x)
+        return x
+
+
+class Conv2DTranspose(eqx.Module):
+    parameters: Sequence[eqx.nn.ConvTranspose2d]
+    activations: Sequence[Callable] = eqx.static_field()
+
+    def __init__(
+        self,
+        layers: Tuple[
+            int,
+            int,
+            Sequence[int],
+            Sequence[int],
+            Sequence[int],
+            Sequence[int],
+            Sequence[int],
+            Callable,
+            bool,
+        ],
+        key: jrandom.PRNGKey,
+    ):
+        assert (
+            len(layers) > 0
+        ), f"Number of ConvTranspose layers should be at least 1, got: {len(layers)}"
+        self.parameters = []
+        self.activations = []
+        for (
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            output_padding,
+            activation,
+            use_bias,
+        ) in layers:
+            key, _ = jrandom.split(key, num=2)
+            self.parameters.append(
+                eqx.nn.ConvTranspose2d(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=padding,
+                    output_padding=output_padding,
+                    dilation=dilation,
+                    use_bias=use_bias,
+                    key=key,
+                )
+            )
+            self.activations.append(activation)
+
+    @property
+    def num_layers(self):
+        return len(self.parameters)
 
     @jax.jit
     def __call__(self, input: np.ndarray) -> np.ndarray:
