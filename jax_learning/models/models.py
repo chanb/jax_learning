@@ -2,7 +2,6 @@ from abc import abstractmethod
 from typing import Tuple, Sequence, Callable, Any, Optional
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np

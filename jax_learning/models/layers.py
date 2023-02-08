@@ -12,6 +12,7 @@ class MLP(eqx.Module):
     _out_dim: int = eqx.static_field()
     weights: Sequence[eqx.nn.Linear]
     biases: Sequence[jnp.ndarray]
+    activation: Callable = eqx.static_field()
 
     def __init__(
         self,
@@ -20,6 +21,7 @@ class MLP(eqx.Module):
         hidden_dim: int,
         num_hidden: int,
         key: jrandom.PRNGKey,
+        activation: Callable = jax.nn.relu,
     ):
         self._in_dim = in_dim
         self._out_dim = out_dim
@@ -40,6 +42,7 @@ class MLP(eqx.Module):
         key, _ = jrandom.split(key, num=2)
         self.weights.append(eqx.nn.Linear(hidden_dim, out_dim, use_bias=False, key=key))
         self.biases.append(jnp.zeros(out_dim))
+        self.activation = activation
 
     @property
     def in_dim(self):
@@ -57,7 +60,7 @@ class MLP(eqx.Module):
     def __call__(self, input: np.ndarray) -> np.ndarray:
         x = input
         for layer_i in range(self.num_hidden):
-            x = jax.nn.relu(self.weights[layer_i](x) + self.biases[layer_i])
+            x = self.activation(self.weights[layer_i](x) + self.biases[layer_i])
         x = self.weights[-1](x) + self.biases[-1]
         return x
 
